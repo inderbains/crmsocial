@@ -1,5 +1,44 @@
 # RealVolt Social Studio
 
+## Update 3 — Working core CRM
+
+### Install on your existing app
+1. Upload this ZIP's EXTRACTED source files and folders to the root of your existing GitHub `crmsocial` repository. Replace same-name files, including package.json and package-lock.json. Include .github and tests.
+2. In your EXISTING Supabase project's SQL Editor run `supabase/003_crm.sql`.
+3. If you have NOT installed the workspace/property update yet, also run `supabase/002_workspace_properties.sql`. Do not rerun `schema.sql` when social_drafts and brand_kits already exist.
+4. Keep Hostinger's current public Supabase environment variables and redeploy with output directory `out`.
+5. Open My workspace > CRM. The CRM tile now opens the working application.
+
+### CRM included
+- Dashboard: contact counts, open pipeline, overdue tasks, closed contacts, upcoming follow-ups and recent contacts.
+- Contacts: create/edit/delete; email/phone; buyer/seller/type; source; area; budget; tags; pipeline stage; assigned-agent label and marketing consent status.
+- Search name/email/phone/tags/source/area/agent; filter by contact type and stage.
+- Profiles: saved contact information, linked tasks and a chronological activity/notes history with manual Note/Call/Email/Meeting entries.
+- Pipeline: stage columns with explicit Move to selectors, profile links and follow-up creation.
+- Tasks: create/edit/delete, optional linked contact, due date, priority, complete/reopen, Open/Overdue/Today/Completed filters.
+- CSV: downloadable format, validated preview before importing up to 500 contacts, skip duplicate emails, export currently filtered contacts. No existing records are overwritten by import.
+- All CRM data persists in Supabase. RLS isolates users and enforces ownership when linking tasks/notes to contacts. Duplicate nonempty contact emails are prevented per user in the database.
+
+### Explicit limits
+- This is a working CORE CRM, not every possible CRM integration.
+- Assigned agent is a text organisational label; it does not invite agents, transfer ownership or grant team access. Brokerage-wide CRM sharing/roles are not implemented.
+- Email/phone links open your mail/calling app. Activity entries are manual. No inbox sync, tracked email sending, SMS or automated email sequences are included.
+- Task due dates show in the CRM; no unattended email/push reminders run yet.
+- No MLS/DDF lead ingestion, transactions, digital signatures, commission accounting or real social publishing is included.
+- Consent is recorded as an account-entered status; no legal consent collection/audit workflow is claimed.
+- Contacts without email can still duplicate. CSV field values must follow the provided template. Export neutralises formula-leading values for spreadsheet safety.
+- Contact deletion also deletes that contact's notes and linked tasks, after a confirmation dialog.
+
+### Validation
+Production static build and TypeScript checks passed; six CSV tests cover quoted/multiline fields, malformed rows, duplicate skipping, validation, formula safety and round trips. Run `npm test` to repeat them.
+Live Supabase migration, cross-account access tests and Hostinger browser tests require your project setup and have not been performed here.
+
+### Check on your deployed app
+Create a contact, reload, search/filter it, update stage from Pipeline, record a note, add a dated task, mark/reopen it, edit contact fields and export. Import the template with a new email; importing it again should skip the duplicate. Sign in with a second account and verify it cannot see or modify the first account's contacts/tasks/notes. Confirm a forged task/notes insert pointing to another account's contact is rejected by RLS. Existing Social Studio/property pages should still work.
+
+---
+
+
 ## Update 2 — Workspace dashboard + property pages
 
 For your EXISTING crmsocial project:
@@ -13,7 +52,7 @@ For your EXISTING crmsocial project:
 
 ### What is ready and what is planned
 - Ready in code: workspace hub/navigation, saved workspace name/type, property-page CRUD (create/read/update and unpublish), public property gallery/contact page and shareable links.
-- CRM, Transactions, Sign Digi and Back Office have clearly marked planned-module screens. Their operational workflows have not been implemented.
+- Transactions, Sign Digi and Back Office have clearly marked planned-module screens. CRM now opens the working core application described above.
 - Facebook/Instagram/LinkedIn OAuth and publishing are still pending.
 - Property pages contain PUBLIC marketing data only. Published records can be read by anonymous visitors under RLS. Never put private seller/client notes in them. Drafts are restricted to their owner. Agent contact details become public when published.
 - Public page content is loaded in the browser, so social-link preview images and per-property server-rendered SEO metadata are not implemented yet.
@@ -42,7 +81,7 @@ Next.js App Router + React + TypeScript + Supabase. Builds with Node.js into sta
 - Email/password signup, sign-in, confirmation redirect, reset-password flow and sign-out.
 - Supabase SQL with Row Level Security for account separation.
 - Facebook/Instagram/LinkedIn connection setup screens. Actual provider OAuth and publishing are NOT implemented.
-- CRM and transactions are future modules.
+- Core CRM is included; transactions are a future module.
 
 ## First: Supabase
 1. Create a new Supabase project. In SQL Editor run `supabase/schema.sql` once.
