@@ -1,5 +1,38 @@
 # RealVolt Social Studio
 
+## Update 2 — Workspace dashboard + property pages
+
+For your EXISTING crmsocial project:
+1. Upload this ZIP's source files to the ROOT of your existing GitHub repository, replacing files of the same name. Include new files and folders. Do not upload the ZIP itself, node_modules, out or .env.local.
+2. In your EXISTING Supabase project run ONLY `supabase/002_workspace_properties.sql`. This is an additive migration; it does not delete existing users, drafts or brand settings. Do NOT rerun schema.sql if the original tables are already installed.
+3. Keep your existing Hostinger environment variables. Rebuild/redeploy from GitHub with output directory `out`.
+4. After signing in, the main workspace opens first. The My workspace button always returns here; Social Studio opens the existing social dashboard.
+5. Workspace settings lets the workspace owner select Individual agent or Brokerage. Brokerage mode displays Back Office. This setting configures the module menu only; it is NOT a team role/permission system.
+6. Open Property Pages in Social Studio. Create a page, upload photos, add details and public agent contacts. Save a private draft or select Publish when saving.
+7. For a published page use Open or Copy link. Public URLs use `/property/?id=...`, compatible with static hosting. Unpublish to make the public link unavailable.
+
+### What is ready and what is planned
+- Ready in code: workspace hub/navigation, saved workspace name/type, property-page CRUD (create/read/update and unpublish), public property gallery/contact page and shareable links.
+- CRM, Transactions, Sign Digi and Back Office have clearly marked planned-module screens. Their operational workflows have not been implemented.
+- Facebook/Instagram/LinkedIn OAuth and publishing are still pending.
+- Property pages contain PUBLIC marketing data only. Published records can be read by anonymous visitors under RLS. Never put private seller/client notes in them. Drafts are restricted to their owner. Agent contact details become public when published.
+- Public page content is loaded in the browser, so social-link preview images and per-property server-rendered SEO metadata are not implemented yet.
+- Photos are compressed and stored in JSON for this starter. A private Storage-based media pipeline is a future scaling step.
+
+### Acceptance checks on your deployed app
+- My workspace opens the module dashboard; Social Studio reopens the social overview.
+- Individual workspace has no Back Office tile. Select Brokerage and save: tile appears and remains after reload.
+- Create/edit a property draft. Its public URL must be unavailable to a signed-out browser.
+- Publish it, copy the link, open incognito, check gallery, details and contact buttons.
+- Unpublish and reload the incognito URL: it must become unavailable.
+- Account B cannot edit/read Account A's drafts or workspace settings; published property marketing pages are public.
+- Existing social drafts and branding still load.
+
+Production build and TypeScript checks are run locally. Live database migration, authentication, publication and two-account isolation checks need your deployed Supabase project and are not claimed as completed.
+
+---
+
+
 Next.js App Router + React + TypeScript + Supabase. Builds with Node.js into static HTML/CSS/JS for regular Hostinger shared hosting.
 
 ## Included
