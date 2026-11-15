@@ -1,0 +1,3 @@
+[functions.closing-packet]
+verify_jwt = false
+# JWT is verified with auth.getUser inside the function before every operation.
