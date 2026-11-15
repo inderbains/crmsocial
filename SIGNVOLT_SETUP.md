@@ -1,11 +1,11 @@
 # SignVolt v1 — direct sending and PDF signing
 
-Release 0.7.0. SignVolt replaces the planned Sign Digi module. It uses RealVolt's own branding and a familiar three-step workflow: Documents → Signers → Place fields. There is NO separate sender preview step. Send signing links saves the current draft, validates it, freezes the document/fields and sends the eligible invitations directly.
+Release 0.7.1. SignVolt replaces the planned Sign Digi module. It uses RealVolt's own branding and a familiar three-step workflow: Documents → Signers → Place fields. There is NO separate sender preview step. Send signing links saves the current draft, validates it, freezes the document/fields and sends the eligible invitations directly.
 
 ## Install
 
 1. Extract the NEW ZIP into a fresh folder. Replace the source in the existing GitHub repository, including app, lib, scripts, supabase, package.json and package-lock.json. Retain Hostinger's existing environment variables.
-2. Use Node 22.13+ (or Node 24), build command npm run build, output directory out. The prebuild script automatically copies the installed PDF.js worker, fonts, CMaps and decoders into public/vendor/pdfjs. Those generated assets are deliberately not included in this source ZIP. Upload scripts/prepare-pdfjs.mjs and the updated package files, not only app/page.tsx. The build log should show realvolt-social@0.7.0 and a successful prebuild asset preparation.
+2. Use Node 22.13+ (or Node 24), build command npm run build, output directory out. The prebuild script prepares fonts, CMaps and decoders in public/vendor/pdfjs. The worker is bundled separately by Webpack into a hashed _next/static/media/pdf-worker.*.js file. Those generated assets are deliberately not included in this source ZIP. Upload next.config.mjs, scripts/prepare-pdfjs.mjs and the updated package files, not only app/page.tsx. The build log should show realvolt-social@0.7.1 and a successful prebuild asset preparation.
 3. After the existing migrations through 011 are installed, run ONLY supabase/012_signvolt.sql once. Do not rerun older migrations. This adds private requests, recipients, activity records, verification helpers and the private signvolt-files bucket.
 4. Deploy the server function from this checkout:
 
