@@ -28,3 +28,12 @@
 
 /* Original RealVolt palette, with dates and selected surfaces following the office primary. */
 .personal-dates-card{background:#e7eddf}.office-theme .personal-dates-card{background:var(--theme-soft,#e7eddf);border-color:color-mix(in srgb,var(--green) 15%,white)}.office-theme nav button.active,.office-theme .workspace-active,.office-theme .notice,.office-theme .hero{background:var(--theme-soft,#e7eddf)}.office-theme .personal-dates-card input,.office-theme .personal-dates-card textarea{background:white}.office-theme .personal-dates-card .draftrow{border-color:color-mix(in srgb,var(--green) 15%,white)}
+
+/* RealVolt identity stays orange/green while office controls remain customisable. */
+.logo{color:#193e32}.office-theme .logo .bolt,.logo .bolt{background:#da2c00;color:#d8f38a}.logo>span:last-child{color:#85a06a!important}
+
+/* DDF listing integration (inherits current brokerage theme palette). */
+.ddf-metrics{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px;margin:15px 0 24px}
+.ddf-metrics .panel{padding:20px}.ddf-metrics b{font-size:21px;color:var(--green,#245c49)}.ddf-metrics p{margin-top:8px}
+.ddf-panel{margin:16px 0 24px}.ddf-panel .sectionhead{align-items:center}.ddf-switch{display:flex;flex-wrap:wrap;gap:10px;margin:16px 0}.ddf-form{max-width:650px;display:grid;gap:12px}.ddf-status{display:flex;gap:14px;flex-wrap:wrap;align-items:center}.ddf-form .btn{justify-self:start}.ddf-listings{display:grid;gap:12px;margin-top:12px}.ddf-listing{padding:18px;border:1px solid #e3e9df;border-radius:12px;display:flex;justify-content:space-between;align-items:center;gap:15px}.ddf-listing h3{margin:7px 0}.ddf-listing p{margin:5px 0}.ddf-listing .btn{white-space:nowrap}
+@media(max-width:700px){.ddf-metrics{grid-template-columns:1fr}.ddf-listing{align-items:flex-start;flex-direction:column}}

@@ -1,0 +1,29 @@
+REALVOLT DDF UPDATE v0.9.1 — ONLY THE 9 NEW / CHANGED FILES
+
+This package contains only the differences from RealVolt_GreenTheme_LogoFix.zip.
+Do not upload a ZIP file directly to GitHub. Extract this ZIP first.
+
+HOW TO UPLOAD USING GITHUB WEBSITE (MAIN BRANCH)
+1. Make a backup of the current GitHub branch.
+2. At repository ROOT, upload: package.json, package-lock.json, DDF_PHASE1_SETUP.md
+3. Open the app/ folder on GitHub, upload: ddf-hub.tsx, globals.css, page.tsx, workspace-home.tsx
+4. Open the lib/ folder, upload: ddf.ts
+5. Open the supabase/ folder, upload: 015_ddf_listing_foundation.sql
+6. Accept replacement/overwriting the matching files, and commit changes to the deployment branch.
+7. Confirm Hostinger builds successfully.
+8. Back up and review the SQL migration; run only 015_ddf_listing_foundation.sql against your existing Supabase project.
+9. Visit My Workspace > DDF & Listings. Confirm v0.9.1 appears next to the logo.
+
+DO NOT paste secret DDF API credentials into the browser. The new feed reference form is not a live importer.
+Please follow DDF_PHASE1_SETUP.md for permission, migration and deployment details.
+
+FILE LIST (9):
+ - DDF_PHASE1_SETUP.md
+ - app/ddf-hub.tsx
+ - app/globals.css
+ - app/page.tsx
+ - app/workspace-home.tsx
+ - lib/ddf.ts
+ - package-lock.json
+ - package.json
+ - supabase/015_ddf_listing_foundation.sql
