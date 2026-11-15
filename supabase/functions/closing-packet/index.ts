@@ -21,7 +21,7 @@ Deno.serve(async(req:Request)=>{
  if(d.kind!=='Sale'||!['Submitted','Approved'].includes(d.review_status))return reply({error:'Submit the sale before preparing closing documents'},409);
  const b=await db.from('brokerages').select('*').eq('id',d.brokerage_id).single();if(b.error)throw b.error;
  const extra=String(body.instructions||'').trim();if(extra.length>8000)return reply({error:'Instructions are too long'},400);
- const texts=packetTexts(d,b.data,body.side,extra),recipient=d[body.side+'_lawyer'];
+ const template=await db.from('office_document_templates').select('*').eq('brokerage_id',d.brokerage_id).maybeSingle();if(template.error)throw template.error;const texts=packetTexts(d,{...b.data,...template.data},body.side,extra),recipient=d[body.side+'_lawyer'];
  const attachments=[];for(const [name,text] of Object.entries(texts))attachments.push({filename:name==='cir'?'Commission_Instruction_Report.pdf':'Letter_to_Complete.pdf',content:base64(await textPDF(text as string))});
  const ids=Array.isArray(body.document_ids)?[...new Set(body.document_ids.map(String))].sort():[];if(ids.length>20)return reply({error:'Select up to 20 additional files'},400);
  let total=0;

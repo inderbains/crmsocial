@@ -1,3 +1,9 @@
 [functions.closing-packet]
 verify_jwt = false
 # JWT is verified with auth.getUser inside the function before every operation.
+
+[functions.agent-office]
+verify_jwt = false
+
+[functions.billing-webhook]
+verify_jwt = false
