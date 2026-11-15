@@ -25,7 +25,7 @@ Stubs show the net cheque, commission/GST and a limited deduction summary. Use t
 
 ## Brokerage theme
 
-Back Office → Brokerage settings → Brokerage theme. Set primary, accent and workspace background colours. Preview, restore saved, reset to defaults or save. Primary controls buttons and navigation, accent controls highlights/focus, and background controls the workspace. Button foreground text adjusts for contrast. Each brokerage has separate settings, and only its admins may change them. Members receive saved colours when opening, refreshing or returning to their app tab.
+Back Office → Brokerage settings → Brokerage theme. Set primary, accent and workspace background colours. Preview, restore saved, reset to defaults or save. Primary controls buttons and navigation, accent controls logo/application icons and highlights/focus, and background controls the workspace. Button foreground text adjusts for contrast. Each brokerage has separate settings, and only its admins may change them. Members receive saved colours when opening, refreshing or returning to their app tab.
 
 Internal workspace, CRM, Transactions, SignVolt and Back Office share this theme. Existing social artwork and uploaded/signed PDFs keep their own contents and colours. External signing pages retain the SignVolt presentation in this release; they do not load brokerage configuration without authentication. Cheques remain black on white for printing. This is colour theming, not a replacement of the RealVolt logo or a custom domain.
 
