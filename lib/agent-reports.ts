@@ -1,0 +1,9 @@
+export type ReportDeal={id:string;transaction_number:number|null;address:string;kind:string;review_status:string;completion_date:string|null;user_id:string};
+export type Allocation={deal_id:string;commission_before_gst:number;commission_gst:number;notes:string};
+export type Charge={id:string;deal_id:string;category:string;description:string;amount:number;gst:number};
+export function cents(v:number){const n=Number(v);if(!Number.isFinite(n))throw new Error('Invalid amount');return Math.round((n+Number.EPSILON)*100)}
+export const cad=(n:number)=>new Intl.NumberFormat('en-CA',{style:'currency',currency:'CAD'}).format(n/100);
+export const transactionLabel=(n:number|null)=>n?'TX-'+String(n).padStart(6,'0'):'Unassigned';
+export function statement(deal:ReportDeal,allocation:Allocation,charges:Charge[]){const fees=charges.filter(c=>c.deal_id===deal.id),gross=cents(allocation.commission_before_gst),gst=cents(allocation.commission_gst),deductions=fees.reduce((s,c)=>s+cents(c.amount),0),feeGST=fees.reduce((s,c)=>s+cents(c.gst),0);return {deal,allocation,fees,gross,gst,deductions,feeGST,netBeforeGST:gross-deductions,netPayable:gross+gst-deductions-feeGST,gstDifference:gst-feeGST}}
+export function earnedStatements(deals:ReportDeal[],allocations:Allocation[],charges:Charge[],today:string){return deals.filter(d=>d.kind==='Sale'&&d.review_status==='Approved'&&d.completion_date&&d.completion_date<=today).flatMap(d=>{const a=allocations.find(a=>a.deal_id===d.id);return a?[statement(d,a,charges)]:[]})}
+export function totals(rows:ReturnType<typeof statement>[]){return rows.reduce((s,r)=>({gross:s.gross+r.gross,gst:s.gst+r.gst,deductions:s.deductions+r.deductions,feeGST:s.feeGST+r.feeGST,netBeforeGST:s.netBeforeGST+r.netBeforeGST,netPayable:s.netPayable+r.netPayable,gstDifference:s.gstDifference+r.gstDifference}),{gross:0,gst:0,deductions:0,feeGST:0,netBeforeGST:0,netPayable:0,gstDifference:0})}
