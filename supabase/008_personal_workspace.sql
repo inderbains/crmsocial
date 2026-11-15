@@ -1,0 +1,11 @@
+begin;
+create table public.agent_workspace_profiles(user_id uuid primary key references auth.users(id) on delete cascade,full_name text not null check(length(trim(full_name)) between 1 and 150));
+alter table public.agent_workspace_profiles enable row level security;
+create policy own_workspace_profile on public.agent_workspace_profiles for all to authenticated using(user_id=auth.uid()) with check(user_id=auth.uid());
+grant select,insert,update on public.agent_workspace_profiles to authenticated;
+create table public.agent_personal_dates(id uuid primary key default gen_random_uuid(),user_id uuid not null references auth.users(id) on delete cascade,title text not null check(length(trim(title)) between 1 and 200),event_date date not null,notes text not null default '' check(length(notes)<=4000),completed boolean not null default false,created_at timestamptz not null default now());
+create index on public.agent_personal_dates(user_id,event_date);
+alter table public.agent_personal_dates enable row level security;
+create policy own_personal_dates on public.agent_personal_dates for all to authenticated using(user_id=auth.uid()) with check(user_id=auth.uid());
+grant select,insert,update,delete on public.agent_personal_dates to authenticated;
+commit;

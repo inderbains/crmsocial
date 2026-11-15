@@ -1,0 +1,8 @@
+import test from 'node:test';import assert from 'node:assert/strict';import fs from 'node:fs';import ts from 'typescript';
+const js=ts.transpileModule(fs.readFileSync(new URL('../lib/listing-status.ts',import.meta.url),'utf8'),{compilerOptions:{module:ts.ModuleKind.ESNext,target:ts.ScriptTarget.ES2022}}).outputText;
+const {listingStatus,brokerageDay}=await import('data:text/javascript;base64,'+Buffer.from(js).toString('base64'));
+test('Listing stays active through expiry and expires the following date',()=>{assert.equal(listingStatus('Listing','2026-11-14',null,'2026-11-14'),'Active');assert.equal(listingStatus('Listing','2026-11-14',null,'2026-11-15'),'Expired')});
+test('Termination starts on its scheduled day and takes priority over expiry',()=>{assert.equal(listingStatus('Listing','2026-11-01','2026-11-14','2026-11-14'),'Terminated');assert.equal(listingStatus('Listing','2026-12-01','2026-11-15','2026-11-14'),'Active')});
+test('A converted sale is sold even after the original listing expiry or termination',()=>{assert.equal(listingStatus('Sale','2026-01-01','2026-01-02','2026-11-14'),'Sold')});
+test('Renewing expiry and removing termination restores active status',()=>{assert.equal(listingStatus('Listing','2026-12-31',null,'2026-11-14'),'Active');assert.equal(listingStatus('Listing',null,null,'2026-11-14'),'Active')});
+test('Expiry uses Vancouver calendar day across UTC date boundaries',()=>{assert.equal(brokerageDay(new Date('2026-11-15T06:59:00Z')),'2026-11-14');assert.equal(brokerageDay(new Date('2026-11-15T08:00:00Z')),'2026-11-15');assert.equal(brokerageDay(new Date('2026-07-15T06:59:00Z')),'2026-07-14')});
