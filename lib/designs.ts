@@ -1,10 +1,23 @@
 export type Brand={name:string;website:string;color:string};
+export type DesignFormat='square'|'portrait'|'story';
+export const designFormats:Record<DesignFormat,{label:string;width:number;height:number}>={
+ square:{label:'Square post · 1080 × 1080',width:1080,height:1080},
+ portrait:{label:'Portrait post · 1080 × 1350',width:1080,height:1350},
+ story:{label:'Story / Reel cover · 1080 × 1920',width:1080,height:1920},
+};
+export function designSize(format?:string){return designFormats[(format||'square') as DesignFormat]||designFormats.square;}
+export function exportFilename(draft:Draft){const subject=(draft.listingAddress||draft.title||'social-design').toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'').slice(0,55)||'social-design';return `realvolt-${subject}-${draft.format||'square'}.png`;}
+
 /** All new fields are optional to keep old social_drafts payloads readable. */
 export type Draft={
   _id?:string;template:number;title:string;caption:string;platform:string;date:string;photo:string;
   listingId?:string;listingAddress?:string;listingPrice?:string;
   beds?:string;baths?:string;propertyArea?:string;
   agentName?:string;agentPhone?:string;agentEmail?:string;brokerageName?:string;
+  format?:DesignFormat;accentColor?:string;callToAction?:string;subheading?:string;
+  agentPhoto?:string;brokerageLogo?:string;showAgent?:boolean;showPrice?:boolean;
+  photoGallery?:string[];photoSource?:'sample'|'upload'|'property';
+
 };
 export const defaultBrand:Brand={name:'Your brand',website:'yourwebsite.com',color:'#235e49'};
 export const photos=['https://images.unsplash.com/photo-1600596542815-ffad4c1539a9?w=1000&auto=format&fit=crop','https://images.unsplash.com/photo-1600210492486-724fe5c67fb0?w=1000&auto=format&fit=crop','https://images.unsplash.com/photo-1600607687920-4e2a09cf159d?w=1000&auto=format&fit=crop','https://images.unsplash.com/photo-1600047509807-ba8f99d2cdde?w=1000&auto=format&fit=crop'];
@@ -35,7 +48,7 @@ export const templates=[
  ];
 export function newDraft(template:number):Draft{
  const t=templates[template]||templates[0];
- return {template,title:t.title,caption:'Interested in this property? Contact me for details and to book a private showing.\n\n#RealEstate #SurreyHomes',platform:'Instagram',date:'',photo:photos[t.photo]};
+ return {template,title:t.title,caption:'Interested in this property? Contact me for details and to book a private showing.\n\n#RealEstate #SurreyHomes',platform:'Instagram',date:'',photo:photos[t.photo],photoSource:'sample',format:'square',callToAction:'BOOK A SHOWING',showAgent:true,showPrice:!(t.category==='Just sold'||/just sold/i.test(t.name))};
 }
 /** Build a ready-to-edit post from a property owned by the signed-in agent. */
 export function draftFromProperty(base:Draft, id:string, property:{address?:string;city?:string;price?:string;beds?:string;baths?:string;area?:string;agent?:string;phone?:string;email?:string;brokerage?:string;photos?:string[]}):Draft{
@@ -44,6 +57,6 @@ export function draftFromProperty(base:Draft, id:string, property:{address?:stri
  return {...base,listingId:id,listingAddress:addr,listingPrice:formatted,
   beds:property.beds||'',baths:property.baths||'',propertyArea:property.area||'',
   agentName:property.agent||'',agentPhone:property.phone||'',agentEmail:property.email||'',brokerageName:property.brokerage||'',
-  photo:property.photos?.[0]||base.photo,
-  caption:[base.title,addr,formatted,'Contact '+(property.agent||'me')+' to learn more or request a showing.','#RealEstate #JustListed'].filter(Boolean).join('\n')};
+  photo:property.photos?.[0]||base.photo,photoGallery:property.photos||[],photoSource:property.photos?.length?'property':base.photoSource,
+  caption:[base.title,addr,formatted,'Contact '+(property.agent||'me')+' to learn more or request a showing.',(templates[base.template]?.category==='Just sold'||/just sold/i.test(templates[base.template]?.name||''))?'#RealEstate #JustSold':'#RealEstate #JustListed'].filter(Boolean).join('\n')};
 }
