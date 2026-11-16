@@ -56,6 +56,7 @@ export default function OpenHouseManager({userId,brand,notify}:{userId:string;br
    const base={user_id:userId,property_id:form.property_id||null,title:form.title.trim(),address:form.address.trim(),city:form.city.trim(),starts_at:start.toISOString(),ends_at:end.toISOString(),timezone:form.timezone,status:'draft',agent_name:form.agent_name.trim(),agent_email:form.agent_email.trim(),agent_phone:form.agent_phone.trim(),brokerage_name:form.brokerage_name.trim()};
    let id=form.id;
    if(!id){const res=await db.from('open_house_events').insert(base).select('id').single();if(res.error)throw res.error;id=res.data.id;}
+   if(!id)throw new Error('Open house ID was not returned. Please try saving again.');
    let sheetPath=form.sheet_path,coverPath=form.cover_path;
    if(sheetFile)sheetPath=await uploadFile(id,sheetFile,'sheet');
    if(coverFile)coverPath=await uploadFile(id,coverFile,'cover');

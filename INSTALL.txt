@@ -1,0 +1,21 @@
+REALVOLT v1.5.1 — OPEN HOUSE TYPESCRIPT BUILD FIX
+
+This is a one-file patch for the Hostinger failure:
+app/open-house-manager.tsx (lines 60–61)
+Argument of type 'string | undefined' is not assignable to parameter of type 'string'.
+
+Change:
+After the insert for new open house events, an explicit runtime guard
+checks that Supabase returned an event ID. This lets TypeScript establish
+that id is a string before uploading the sheet or cover image.
+
+INSTALL:
+1. Extract this ZIP.
+2. In your existing GitHub repository, replace ONLY:
+   app/open-house-manager.tsx
+3. Commit changes. Hostinger should rebuild automatically.
+4. No SQL migration is necessary for this patch. Keep any
+   supabase/021_open_house_qr_checkin.sql migration you already applied.
+
+No other RealVolt code or files need replacing.
+This has not been validated against your live Hostinger deployment.
