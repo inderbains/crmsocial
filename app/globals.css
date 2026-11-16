@@ -231,7 +231,64 @@
  .rv-oh-poster-foot{padding:.17in!important}
 }
 
-@media print{
- .modalback{position:static!important;display:block!important;background:none!important;backdrop-filter:none!important;overflow:visible!important;padding:0!important}
- .rv-oh-poster-dialog{position:static!important;overflow:visible!important;max-height:none!important;width:auto!important;padding:0!important;background:none!important;box-shadow:none!important}
-}
+/* RealVolt v1.5.3 — agent marketing profile and Open House poster templates */
+.rv-agent-marketing-head{display:flex;justify-content:space-between;gap:12px;align-items:flex-start;margin-bottom:22px}
+.rv-agent-marketing-head h2{margin:5px 0 8px}
+.rv-agent-marketing-media{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:15px;margin:14px 0 24px}
+.rv-agent-media-card{border:1px solid var(--line);border-radius:15px;padding:15px;display:flex;flex-direction:column;align-items:flex-start;gap:9px;min-width:0;background:#f8faf7}
+.rv-agent-media-card>label{font-weight:700;font-size:13px}
+.rv-agent-media-card>small,.rv-agent-bio small{font-size:11px;color:var(--muted)}
+.rv-agent-media-card input[type=file]{width:100%;max-width:100%;font-size:12px}
+.rv-agent-image{height:116px;width:116px;border-radius:50%;background:#e5eee5;display:grid;place-items:center;overflow:hidden;color:#487f5b}
+.rv-agent-image img{width:100%;height:100%;object-fit:cover}
+.rv-agent-image.rv-agent-logo{width:180px;max-width:100%;height:100px;border-radius:10px;background:#fff;border:1px solid #e3ede3}
+.rv-agent-logo img{object-fit:contain;padding:9px}
+.rv-agent-marketing-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:15px}
+.rv-agent-marketing-grid .field,.rv-agent-marketing-grid input,.rv-agent-marketing-grid textarea{min-width:0;width:100%}
+.rv-agent-bio{grid-column:1/-1}
+.rv-agent-marketing form>.hint{margin:17px 0}
+.rv-oh-date-grid{display:grid;grid-template-columns:minmax(0,1.4fr) 1fr 1fr;gap:10px}
+.rv-oh-date-grid input{min-width:0}
+.rv-oh-style-select{margin:18px 0}.rv-oh-style-select>label{font-weight:700;display:block;margin-bottom:10px}
+.rv-oh-style-grid{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:9px}
+.rv-oh-style-choice{border:2px solid #dbe5db;background:#fff;padding:6px;border-radius:12px;cursor:pointer;text-align:left;display:grid;gap:8px;min-width:0;color:#274736}
+.rv-oh-style-choice:hover,.rv-oh-style-choice:focus-visible{border-color:#608a65;outline-offset:2px}
+.rv-oh-style-choice.is-selected{border-color:#28764d;box-shadow:0 0 0 2px #a7d0b4}
+.rv-oh-style-choice>b{font-size:10px;line-height:1.3;padding:0 3px 3px;overflow-wrap:anywhere}
+.rv-oh-style-mini{display:flex;flex-direction:column;justify-content:space-between;padding:10px 5px;height:94px;border-radius:7px;background:linear-gradient(140deg,#1e4d37 0 53%,#eaf2e9 53%);color:#fff;overflow:hidden}
+.rv-oh-style-mini strong{font:800 11px/1.1 Manrope}.rv-oh-style-mini small{font-size:8px;color:#2e5c40;background:#fff;padding:5px 3px;text-align:center;border-radius:4px}
+.rv-oh-style-modern .rv-oh-style-mini{background:linear-gradient(90deg,#dfeee7 0 44%,#2c6859 44%);color:#244a3a}
+.rv-oh-style-luxury .rv-oh-style-mini{background:linear-gradient(145deg,#161f1b,#39422d);color:#f1d5a1}.rv-oh-style-luxury .rv-oh-style-mini small{color:#161f1b;background:#f1d5a1}
+.rv-oh-style-minimal .rv-oh-style-mini{background:#f6f9f5;color:#1f4033;border:1px solid #d1e0d5}
+.rv-oh-style-bold .rv-oh-style-mini{background:linear-gradient(160deg,#df6926,#eaa15d);color:#fff}.rv-oh-style-bold .rv-oh-style-mini small{color:#8e3b1e}
+.rv-oh-host-summary{margin:16px 0;padding:17px;border:1px solid #d7e6d9;border-radius:14px;background:#f6faf5}
+.rv-oh-host-summary .hint{margin:10px 0}.rv-oh-host-summary-head{display:flex;align-items:center;gap:13px}
+.rv-oh-host-summary-head img,.rv-oh-host-avatar{width:58px;height:58px;flex:0 0 58px;border-radius:50%;object-fit:cover;background:#e0eee5;display:grid;place-items:center;font-size:12px;color:#31734d}
+.rv-oh-host-summary-head>div{min-width:0}.rv-oh-host-summary-head p{font-size:12px;color:#4c6754;overflow-wrap:anywhere;margin:3px 0}
+.rv-oh-poster-agent-header{display:flex;align-items:center;gap:10px;min-width:0}.rv-oh-poster-agent-header>div{display:grid;gap:2px}
+.rv-oh-agent-headshot{width:57px;height:57px;object-fit:cover;border-radius:50%;border:2px solid #d7ead8}
+.rv-oh-poster-agent-header small{font-size:10px;font-weight:500}
+.rv-oh-brand-mark{max-width:135px;max-height:48px;object-fit:contain;object-position:left;margin-top:8px}
+.rv-oh-style-modern.rv-openhouse-poster .rv-oh-poster-photo{background:#345f56}
+.rv-oh-style-modern.rv-openhouse-poster .rv-oh-poster-foot{background:#285b4f}
+.rv-oh-style-modern.rv-openhouse-poster .rv-oh-qr-panel{border-radius:4px;border-color:#578476}
+.rv-oh-style-modern.rv-openhouse-poster .rv-oh-poster-hero strong{font-weight:600;letter-spacing:1px}
+.rv-oh-style-luxury.rv-openhouse-poster{background:#1a241e;color:#f0e7d7}
+.rv-oh-style-luxury.rv-openhouse-poster .rv-oh-poster-body{background:#202b23}
+.rv-oh-style-luxury.rv-openhouse-poster .rv-oh-poster-body h2,.rv-oh-style-luxury.rv-openhouse-poster .rv-oh-sign-agent b{color:#f1d19b}
+.rv-oh-style-luxury.rv-openhouse-poster .rv-oh-poster-body p,.rv-oh-style-luxury.rv-openhouse-poster .rv-oh-sign-agent,.rv-oh-style-luxury.rv-openhouse-poster .rv-oh-sign-agent small{color:#f1e6d3}
+.rv-oh-style-luxury.rv-openhouse-poster .rv-oh-qr-panel{background:#fff;color:#16362b;border-color:#dec18b}
+.rv-oh-style-luxury.rv-openhouse-poster .rv-oh-poster-foot{background:#111d16;color:#f1d19b}
+.rv-oh-style-luxury.rv-openhouse-poster .rv-oh-poster-hero strong{color:#f1d19b}
+.rv-oh-style-minimal.rv-openhouse-poster .rv-oh-poster-photo:after{background:linear-gradient(0deg,#f8faf4d9,#f8faf430)}
+.rv-oh-style-minimal.rv-openhouse-poster .rv-oh-poster-hero{color:#244735}
+.rv-oh-style-minimal.rv-openhouse-poster .rv-oh-sign-eyebrow{color:#3b7858}
+.rv-oh-style-minimal.rv-openhouse-poster .rv-oh-qr-panel{border-color:#d0e4d5;border-radius:6px}
+.rv-oh-style-minimal.rv-openhouse-poster .rv-oh-poster-foot{background:#e8f2eb;color:#315a41}
+.rv-oh-style-bold.rv-openhouse-poster .rv-oh-poster-photo:after{background:linear-gradient(0deg,#8b3817ee,#cc581259 80%)}
+.rv-oh-style-bold.rv-openhouse-poster .rv-oh-poster-foot{background:#a7461d}
+.rv-oh-style-bold.rv-openhouse-poster .rv-oh-qr-panel{border-color:#d35d2a}
+.rv-oh-style-bold.rv-openhouse-poster .rv-oh-qr-panel b{color:#b44c20}
+.rv-oh-style-bold.rv-openhouse-poster .rv-oh-sign-eyebrow{color:#ffe3c6}
+@media(max-width:760px){.rv-oh-style-grid{grid-template-columns:repeat(3,minmax(0,1fr))}.rv-oh-date-grid{grid-template-columns:1fr 1fr}.rv-oh-date-grid .field:first-child{grid-column:1/-1}}
+@media(max-width:520px){.rv-agent-marketing-media,.rv-agent-marketing-grid{grid-template-columns:1fr}.rv-oh-style-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.rv-agent-marketing-head{flex-wrap:wrap}}
