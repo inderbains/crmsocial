@@ -165,3 +165,13 @@
 .rv-design-channels{margin:12px 0 16px}
 @media(max-width:1100px){.rv-calendar-grid-main{grid-template-columns:1fr}.rv-calendar-planner{padding:22px!important}}
 @media(max-width:600px){.rv-calendar-stats{gap:8px}.rv-calendar-stat{padding:12px}.rv-calendar-stat b{font-size:21px}.rv-calendar-board{padding:12px}.rv-calendar-day{min-height:56px;padding:4px;gap:2px}.rv-calendar-day-num{font-size:11px}.rv-calendar-day-pills small{display:none}.rv-calendar-day-pills span{font-size:9px;padding:3px}.rv-calendar-month h2{font-size:15px;min-width:123px}.rv-calendar-toolbar-actions{flex-wrap:wrap}.rv-calendar-planner{padding:15px!important}.rv-calendar-post{align-items:flex-start;flex-direction:column}.rv-calendar-selected .sectionhead{gap:8px;flex-wrap:wrap}}
+/* RealVolt consolidated marketing UI (v1.4): responsive on phones/tablets */
+.rv-ad-editor {display:grid;gap:15px;padding:5px 0 20px;}
+.rv-ad-preview {display:flex;align-items:center;gap:12px;border:1px solid var(--line,#dce5df);border-radius:12px;padding:9px;margin-top:9px;}
+.rv-ad-preview img {width:92px;height:80px;object-fit:cover;border-radius:8px;}
+.rv-ad-preview p {font-size:12px;color:var(--muted,#65726b);}
+.rv-checklist {background:var(--paper,#f4f8f5);padding:15px;border-radius:12px;border:1px solid var(--line,#e4eae5);}
+.rv-checklist p {margin:7px 0;font-size:13px;}
+.rv-budget-estimate {font-weight:750;font-size:20px;min-height:34px;}
+.rv-office-metric-grid {grid-template-columns:repeat(auto-fit,minmax(170px,1fr));}
+@media (max-width:720px){.rv-ad-preview{align-items:flex-start}.rv-ad-preview img{width:74px;height:74px}.rv-ad-editor .rv-editor-control-grid{grid-template-columns:1fr}.rv-office-metric-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.rv-ad-editor input,.rv-ad-editor select,.rv-ad-editor textarea{max-width:100%;min-width:0}}
