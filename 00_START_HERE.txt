@@ -1,0 +1,58 @@
+RealVolt Agent Website Studio - missing modules fix (v1.5.7)
+=======================================================
+
+THIS ZIP IS NOT THE ENTIRE REALVOLT PROJECT.
+It contains the seven supporting files missing from your existing v1.5.7 upload.
+It will not modify CRM, Open Houses, SignVolt, Transactions or Back Office.
+
+VERY IMPORTANT: Do not upload this ZIP as a file to GitHub.
+Extract the ZIP on your computer before uploading the files INSIDE it.
+
+BEST METHOD - TWO SMALL GITHUB UPLOADS:
+
+PART A - COMPONENT FILES
+1. On GitHub visit:
+   https://github.com/inderbains/crmsocial/tree/main/components/rv-agent-site
+2. Click Add file > Upload files.
+3. On your computer, open extracted folder components > rv-agent-site.
+4. Drag ALL THREE individual files into GitHub upload area:
+      AgentWebsite.tsx
+      AgentWebsite.module.css
+      AgentSiteStudio.module.css
+5. Verify all three filenames appear before clicking Commit changes.
+   Do not create an extra nested folder named rv-agent-site inside rv-agent-site.
+
+PART B - LIBRARY FILES
+6. On GitHub visit:
+   https://github.com/inderbains/crmsocial/tree/main/lib/rv-agent-site
+7. Click Add file > Upload files.
+8. On your computer, open extracted folder lib > rv-agent-site.
+9. Drag ALL FOUR individual files into GitHub upload area:
+      types.ts
+      routing.ts
+      validation.ts
+      data.ts
+10. Verify all four filenames appear before clicking Commit changes.
+
+VERIFY YOUR REPOSITORY BEFORE DEPLOYMENT:
+These seven paths must resolve to code files (not a GitHub 404):
+https://github.com/inderbains/crmsocial/blob/main/components/rv-agent-site/AgentWebsite.tsx
+https://github.com/inderbains/crmsocial/blob/main/components/rv-agent-site/AgentWebsite.module.css
+https://github.com/inderbains/crmsocial/blob/main/components/rv-agent-site/AgentSiteStudio.module.css
+https://github.com/inderbains/crmsocial/blob/main/lib/rv-agent-site/types.ts
+https://github.com/inderbains/crmsocial/blob/main/lib/rv-agent-site/routing.ts
+https://github.com/inderbains/crmsocial/blob/main/lib/rv-agent-site/validation.ts
+https://github.com/inderbains/crmsocial/blob/main/lib/rv-agent-site/data.ts
+
+Then redeploy Hostinger. Do not edit package.json, tsconfig.json, next.config.mjs
+or re-upload other earlier patches for this specific missing-module error.
+
+If the GitHub upload UI will not overwrite an existing file, stop and use its
+edit-pencil option for that file or use a GitHub desktop clone. Do not delete
+other parts of the repo.
+
+GitHub web upload does not automatically UNZIP files or import nested directory
+structures from a ZIP archive itself.
+
+This fixes the known missing source files. It is not a guarantee against other
+compiler or runtime issues. Database migration and auth checks may still be needed.
