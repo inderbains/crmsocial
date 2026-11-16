@@ -17,6 +17,10 @@ export type Draft={
   format?:DesignFormat;accentColor?:string;callToAction?:string;subheading?:string;
   agentPhoto?:string;brokerageLogo?:string;showAgent?:boolean;showPrice?:boolean;
   photoGallery?:string[];photoSource?:'sample'|'upload'|'property';
+  /** Planning-only fields; live Meta publishing is not enabled. */
+  channels?:Array<'Facebook'|'Instagram'>;
+  scheduleStatus?:'draft'|'planned'|'ready'|'archived';
+  scheduleTimezone?:string;
 
 };
 export const defaultBrand:Brand={name:'Your brand',website:'yourwebsite.com',color:'#235e49'};
@@ -48,7 +52,7 @@ export const templates=[
  ];
 export function newDraft(template:number):Draft{
  const t=templates[template]||templates[0];
- return {template,title:t.title,caption:'Interested in this property? Contact me for details and to book a private showing.\n\n#RealEstate #SurreyHomes',platform:'Instagram',date:'',photo:photos[t.photo],photoSource:'sample',format:'square',callToAction:'BOOK A SHOWING',showAgent:true,showPrice:!(t.category==='Just sold'||/just sold/i.test(t.name))};
+ return {template,title:t.title,caption:'Interested in this property? Contact me for details and to book a private showing.\n\n#RealEstate #SurreyHomes',platform:'Instagram',channels:['Instagram'],scheduleStatus:'draft',date:'',photo:photos[t.photo],photoSource:'sample',format:'square',callToAction:'BOOK A SHOWING',showAgent:true,showPrice:!(t.category==='Just sold'||/just sold/i.test(t.name))};
 }
 /** Build a ready-to-edit post from a property owned by the signed-in agent. */
 export function draftFromProperty(base:Draft, id:string, property:{address?:string;city?:string;price?:string;beds?:string;baths?:string;area?:string;agent?:string;phone?:string;email?:string;brokerage?:string;photos?:string[]}):Draft{
