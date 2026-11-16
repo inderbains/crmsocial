@@ -1,0 +1,5 @@
+# Add to your existing supabase/config.toml when deploying later.
+[functions.meta-connect]
+verify_jwt = false
+# The function verifies the signed-in caller on POST itself;
+# GET must be allowed so Meta can reach the OAuth callback with no user JWT.
