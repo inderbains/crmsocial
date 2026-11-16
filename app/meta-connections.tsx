@@ -13,11 +13,11 @@ export default function MetaConnections({userId,notify,onOpenAds,initialScope='a
  const [assets,setAssets]=useState<Asset[]>([]);
  const [officeId,setOfficeId]=useState<string|null>(null);
  const [officeName,setOfficeName]=useState('Brokerage');
- const [scope,setScope]=useState<'agent'|'brokerage'>(initialScope);
+ const scope=initialScope;
  const [busy,setBusy]=useState('');
  const [loading,setLoading]=useState(true);
  const [error,setError]=useState('');
- async function refresh(){if(!db)return;setLoading(true);setError('');
+ async function refresh(){if(!db)return;setLoading(true);setError('');setOfficeId(null);
   const [a,b]=await Promise.all([
    db.from('rv_meta_connections').select('id,owner_user_id,connection_scope,brokerage_id,meta_user_name,meta_user_id,connection_status,granted_scopes,connected_at').order('connected_at',{ascending:false}),
    db.from('brokerage_members').select('brokerage_id,role,brokerages(name)').eq('user_id',userId).maybeSingle(),
@@ -30,9 +30,9 @@ export default function MetaConnections({userId,notify,onOpenAds,initialScope='a
     if(result.error)setError(result.error.message);else setAssets((result.data||[]) as Asset[]);
    }else setAssets([]);
   }
-  if(!b.error&&b.data?.role==='admin'&&b.data.brokerage_id){setOfficeId(b.data.brokerage_id);const raw=b.data.brokerages as unknown as {name?:string}|{name?:string}[]|null;
-    setOfficeName((Array.isArray(raw)?raw[0]?.name:raw?.name)||'Brokerage');
-  }
+  if(!b.error&&b.data?.role==='admin'&&b.data.brokerage_id){const permission=await db.rpc('is_brokerage_admin',{b:b.data.brokerage_id});if(!permission.error&&permission.data===true){setOfficeId(b.data.brokerage_id);const raw=b.data.brokerages as unknown as {name?:string}|{name?:string}[]|null;
+    setOfficeName((Array.isArray(raw)?raw[0]?.name:raw?.name)||'Brokerage');}}
+  if(b.error||!b.data||b.data.role!=='admin')setOfficeId(null);
   setLoading(false);
  }
  useEffect(()=>{void refresh()},[userId]);
@@ -51,10 +51,11 @@ export default function MetaConnections({userId,notify,onOpenAds,initialScope='a
   await run('disconnect',{connection_id:c.id});}
  const filtered=connections.filter(c=>scope==='agent'?c.connection_scope==='agent'&&c.owner_user_id===userId:c.connection_scope==='brokerage'&&c.brokerage_id===officeId);
  const accountAssets=filtered.flatMap(c=>assets.filter(a=>a.connection_id===c.id&&a.status==='available'));
+ if(scope==='brokerage'&&!loading&&!officeId)return <section className="panel"><h2>Brokerage administrator access required</h2><p>This area is available only through Back Office to an authorized brokerage administrator.</p></section>;
  return <>
   <div className="headrow"><div><h1>Meta Social & Ads Connections</h1><p>One secure connection for Facebook publishing, Instagram publishing, and Meta paid advertising.</p></div><button className="btn" onClick={()=>void refresh()} disabled={loading}><RefreshCw size={16}/> Refresh</button></div>
   <section className="panel" style={{marginBottom:16}}>
-   <div className="rv-inline" style={{alignItems:'center',justifyContent:'space-between'}}><div><h2>Connection owner</h2><p className="muted">An agent's personal channels and the brokerage's office channels stay separate.</p></div><div className="actions"><button className={'btn '+(scope==='agent'?'primary':'')} onClick={()=>setScope('agent')}><UserCircle2 size={16}/> My accounts</button>{officeId&&<button className={'btn '+(scope==='brokerage'?'primary':'')} onClick={()=>setScope('brokerage')}><Building2 size={16}/> {officeName}</button>}</div></div>
+   <div className="rv-inline" style={{alignItems:'center',justifyContent:'space-between'}}><div><h2>Connection owner</h2><p className="muted">An agent's personal channels and the brokerage's office channels stay separate.</p></div><span className="badge">{scope==='agent'?<><UserCircle2 size={16}/> My Accounts</>:<><Building2 size={16}/> {officeName} — Office Accounts</>}</span></div>
    <div className="rv-inline" style={{gap:14,marginTop:14,flexWrap:'wrap'}}><span className="badge"><Facebook size={14}/> Facebook Pages</span><span className="badge"><Instagram size={14}/> Instagram Professional</span><span className="badge"><Megaphone size={14}/> Meta Ads Accounts</span></div>
    <div className="notice" style={{marginTop:16}}><ShieldCheck size={19}/><div><b>Official Meta authorization—no passwords shared.</b><p>RealVolt only discovers assets that Meta grants to this user. Access tokens stay server-side. Publishing and paid campaigns remain disabled until provider setup, permissions, and review are complete.</p></div></div>
    {error&&<p role="alert" className="notice"><AlertTriangle size={16}/> {error}</p>}

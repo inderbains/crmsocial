@@ -48,3 +48,38 @@
 .rv-template-card{border:1px solid var(--line,#e2e8e2);border-radius:14px;padding:17px;background:var(--card,#fff);}
 .rv-template-card p{color:var(--muted,#64748b);font-size:13px;margin:7px 0 12px;}
 .rv-honeypot{position:absolute!important;left:-10000px!important;top:auto!important;width:1px!important;height:1px!important;overflow:hidden!important;}
+
+/* RealVolt v1.2.1: mobile app-like navigation and secure admin menu placement */
+.rv-mobile-toggle,.rv-mobile-sidebar-top,.rv-mobile-scrim{display:none}
+.rv-header-start,.rv-header-actions{display:flex;align-items:center;gap:12px;min-width:0}
+.rv-control-card{display:flex;flex-direction:column;align-items:flex-start;gap:8px;text-align:left;color:inherit;cursor:pointer}
+.rv-control-card b{font-size:15px}.rv-control-card p{margin:0}.rv-control-card span{color:var(--green);margin-top:auto;font-weight:700}
+.rv-control-card:hover{border-color:var(--green)}
+@media(max-width:760px){
+  .rv-mobile-toggle{display:inline-flex;min-width:44px;min-height:44px;padding:10px}
+  .rv-mobile-sidebar-top{display:flex;justify-content:space-between;align-items:center;margin:0 0 14px;font-weight:700}
+  .rv-mobile-scrim{display:block;position:fixed;inset:0;background:#0f211ba6;z-index:59;border:0;border-radius:0;cursor:pointer}
+  aside{position:fixed!important;inset:0 auto 0 0!important;width:min(85vw,340px)!important;max-height:100dvh;overflow-y:auto!important;padding:18px!important;border-right:1px solid var(--line)!important;background:white;z-index:60;transform:translateX(-105%);transition:transform .2s ease;box-shadow:5px 0 25px #18342e15}
+  aside.rv-sidebar-open{transform:translateX(0)}
+  aside .workspace,aside .aside-bottom,aside>.small{display:flex}
+  aside .workspace{margin:16px 0;display:flex}
+  aside>.small{margin-top:12px}
+  aside nav{display:grid!important;overflow:visible!important;gap:4px!important;margin-top:12px!important}
+  aside nav button{white-space:normal;text-align:left;min-height:42px;padding:10px!important}
+  aside nav .navicon{display:inline-flex;width:27px}
+  aside .aside-bottom{margin-top:20px;display:block}
+  main{margin-left:0!important;padding:0 14px 30px!important;min-width:0}
+  main>header{height:auto;min-height:68px;gap:8px;flex-wrap:wrap;padding:12px 0}
+  main>header .crumb{max-width:55vw;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .rv-header-actions>.badge{display:none}
+  .rv-header-actions .btn{padding:9px 11px;font-size:11px;min-height:40px}
+  .headrow{flex-wrap:wrap}
+  .stats{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .hub-grid{grid-template-columns:repeat(auto-fit,minmax(145px,1fr))!important}
+  .rv-template-grid{grid-template-columns:repeat(auto-fit,minmax(150px,1fr))}
+  .modal{width:100%;max-height:94dvh;padding:16px}
+  .rv-control-card{min-height:140px}
+}
+@media(max-width:420px){.grid{grid-template-columns:1fr 1fr}.stat{padding:10px}.stats{gap:8px}.rv-header-actions .btn{font-size:10px}.rv-template-grid{grid-template-columns:1fr 1fr}}
+@media(prefers-reduced-motion:reduce){aside{transition:none!important}}
