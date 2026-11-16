@@ -175,3 +175,63 @@
 .rv-budget-estimate {font-weight:750;font-size:20px;min-height:34px;}
 .rv-office-metric-grid {grid-template-columns:repeat(auto-fit,minmax(170px,1fr));}
 @media (max-width:720px){.rv-ad-preview{align-items:flex-start}.rv-ad-preview img{width:74px;height:74px}.rv-ad-editor .rv-editor-control-grid{grid-template-columns:1fr}.rv-office-metric-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.rv-ad-editor input,.rv-ad-editor select,.rv-ad-editor textarea{max-width:100%;min-width:0}}
+
+/* RealVolt v1.5 — Open House QR Check-In, agent dashboard and mobile visitor form */
+.rv-oh-manager .headrow{flex-wrap:wrap;gap:16px}
+.rv-oh-stats{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin:19px 0 24px}
+.rv-oh-stats>div{background:#fff;border:1px solid var(--line);border-radius:14px;padding:19px;display:grid;gap:3px}
+.rv-oh-stats b{font:800 26px Manrope;color:var(--green)}.rv-oh-stats span{font-size:12px;color:var(--muted)}
+.rv-oh-list{display:grid;gap:13px;margin-bottom:24px}.rv-oh-card{display:grid;grid-template-columns:200px minmax(0,1fr);gap:22px;padding:14px}
+.rv-oh-thumb{background:#e7eee7;min-height:145px;display:grid;place-items:center;overflow:hidden;border-radius:11px;color:#567c63}
+.rv-oh-thumb img{width:100%;height:100%;max-height:230px;object-fit:cover}
+.rv-oh-details{min-width:0;padding:4px 0}.rv-oh-details h2{margin:10px 0 7px}.rv-oh-details>p{display:flex;align-items:center;gap:6px;margin:4px 0}.rv-oh-details .actions{margin-top:15px}
+.rv-oh-leads{margin-top:20px}.rv-oh-leads h2{margin-bottom:8px}.rv-oh-table-wrap{overflow-x:auto;margin-top:18px}
+.rv-oh-table-wrap table{border-collapse:collapse;width:100%;min-width:720px;text-align:left}.rv-oh-table-wrap th,.rv-oh-table-wrap td{padding:11px 12px;border-bottom:1px solid var(--line);font-size:12px}.rv-oh-table-wrap th{background:#f1f6f1;color:#456455;font-weight:700}
+.rv-oh-modal{width:min(990px,100%)}.rv-oh-modal>form{display:grid;gap:18px}.rv-oh-form-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:22px}.rv-oh-form-grid .rv-oh-form-grid{gap:10px}.rv-oh-form-grid h3{font-size:15px}
+.rv-oh-poster-dialog{width:min(830px,100%);padding:22px;background:#f8faf6}.rv-oh-poster-toolbar{gap:12px;flex-wrap:wrap}.rv-oh-poster-after{margin-top:17px;justify-content:center}
+.rv-openhouse-poster{background:white;min-height:890px;display:flex;flex-direction:column;overflow:hidden;border-radius:6px;box-shadow:0 12px 35px #152d1d20;max-width:680px;margin:auto}
+.rv-oh-poster-photo{height:420px;background:#234b3b;position:relative;display:grid;align-items:end;overflow:hidden}.rv-oh-poster-photo img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+.rv-oh-poster-photo:after{content:'';position:absolute;inset:0;background:linear-gradient(0deg,#102f28e8 0%,#16352b30 70%)}
+.rv-oh-poster-hero{position:relative;z-index:1;color:#fff;padding:38px;display:flex;flex-direction:column;gap:8px}
+.rv-oh-sign-eyebrow{font:700 15px Manrope;letter-spacing:.25em;color:#d2edd7}.rv-oh-poster-hero strong{font:800 clamp(40px,7vw,61px) Manrope;letter-spacing:-2.5px;line-height:1.03}
+.rv-oh-poster-hero>span:last-child{font:600 16px Manrope;line-height:1.4}
+.rv-oh-poster-body{display:grid;grid-template-columns:minmax(0,1fr) 240px;gap:20px;padding:35px 34px;flex:1}.rv-oh-poster-body>div:first-child{min-width:0;display:flex;flex-direction:column;gap:8px}
+.rv-oh-poster-body h2{font:800 27px/1.2 Manrope;letter-spacing:-.4px;overflow-wrap:anywhere}.rv-oh-poster-body p{font-size:14px;color:#496156;line-height:1.4}
+.rv-oh-sign-agent{border-top:1px solid #dbe7dd;margin-top:auto;padding-top:19px;display:flex;flex-direction:column;gap:3px;font-size:13px;color:#4a6256}.rv-oh-sign-agent b{color:#214736;font:800 17px Manrope}
+.rv-oh-qr-panel{border:2px solid #246649;border-radius:18px;display:flex;flex-direction:column;justify-content:center;align-items:center;gap:8px;padding:14px;text-align:center}.rv-oh-qr{display:block;width:100%;max-width:190px;height:auto;aspect-ratio:1}.rv-oh-qr-panel b{font:800 13px Manrope;color:#245c49;letter-spacing:.06em}.rv-oh-qr-panel small{font-size:11px;line-height:1.4;color:#5f7468}
+.rv-oh-poster-foot{background:#143e30;color:#e6f4e8;text-align:center;padding:14px;font-size:11px;letter-spacing:.08em}
+/* Mobile-first public check-in route, outside signed-in RealVolt navigation. */
+.rv-oh-public{min-height:100dvh;background:#f4f7f2;color:#193b2c;font:15px 'DM Sans',sans-serif}
+.rv-oh-public>header{height:auto;min-height:74px;margin:0;padding:14px max(20px,calc((100vw - 960px)/2));display:flex;align-items:center;justify-content:space-between;background:#fff;border:0;border-bottom:1px solid #e4e9e3}
+.rv-oh-public-brand{font:800 25px Manrope;letter-spacing:-1px}.rv-oh-public-brand span{color:#ed8b35}.rv-oh-public>header>span{font:700 11px Manrope;letter-spacing:.18em;color:#59806b}
+.rv-oh-public>main{margin:0 auto!important;padding:27px 16px 60px!important;max-width:920px!important;min-height:auto}
+.rv-oh-public-heading{display:grid;grid-template-columns:1fr 1fr;background:#fff;border-radius:18px;overflow:hidden;border:1px solid #e6ece4;margin-bottom:21px}
+.rv-oh-public-cover{min-height:310px;background:#dce9dc;overflow:hidden}.rv-oh-public-cover img{height:100%;width:100%;object-fit:cover}.rv-oh-public-fallback{height:100%;display:grid;place-items:center;color:#508068}
+.rv-oh-public-intro{padding:34px 30px;display:flex;flex-direction:column;justify-content:center;gap:12px}
+.rv-oh-public-label{font:800 12px Manrope;letter-spacing:.2em;color:#568068}.rv-oh-public-intro h1{font:800 clamp(27px,4vw,40px)/1.15 Manrope;letter-spacing:-.8px}
+.rv-oh-public-intro p{display:flex;align-items:flex-start;gap:9px;color:#49685b}.rv-oh-public-intro svg{flex:0 0 auto;margin-top:2px}
+.rv-oh-public-host{margin-top:10px;font-size:13px;color:#5a7466}
+.rv-oh-public-card{background:#fff;border-radius:18px;padding:33px;max-width:630px;margin:0 auto;border:1px solid #e5eae3;box-shadow:0 8px 22px #17422a0b}
+.rv-oh-public-card h2{font:800 24px Manrope;margin-bottom:10px}.rv-oh-public-card>p{margin:0 0 22px}
+.rv-oh-checkin-form{display:grid;gap:16px;margin-top:21px}.rv-oh-checkin-form>label:not(.rv-oh-consent){display:grid;gap:7px;font-size:13px;font-weight:700}
+.rv-oh-checkin-form input:not([type=checkbox]){width:100%;border:1px solid #d5e1d7;border-radius:10px;background:white;color:#133a2b;padding:14px 13px;min-height:48px;font-size:16px}
+.rv-oh-consent{display:flex;align-items:flex-start;gap:12px;font-size:13px;font-weight:400;line-height:1.5;color:#4c6657}.rv-oh-consent input{margin-top:4px;flex:0 0 19px;width:19px;height:19px;accent-color:#235e49}
+.rv-oh-public-btn{display:inline-flex;align-items:center;justify-content:center;gap:10px;border-radius:10px;padding:15px 20px;min-height:51px;background:#205840;border:0;color:#fff;text-decoration:none;font-weight:800;font-size:15px;cursor:pointer;text-align:center}.rv-oh-public-btn:disabled{opacity:.55}
+.rv-oh-public-error{color:#a03e33!important;font-size:13px;margin-top:10px!important}.rv-oh-public-note{font-size:11px;color:#718174;display:flex;gap:6px;line-height:1.5;margin-top:18px!important}
+.rv-oh-unlocked{text-align:center;display:grid;gap:13px;justify-items:center}.rv-oh-unlocked>svg{color:#27704d}.rv-oh-unlocked a{width:100%;margin-top:5px}.rv-oh-public-footer{text-align:center;padding:18px;font-size:11px;color:#6e8173}
+@media(max-width:800px){.rv-oh-form-grid{grid-template-columns:1fr}.rv-oh-public-heading{grid-template-columns:1fr}.rv-oh-public-cover{min-height:230px;max-height:350px}.rv-oh-public-card{padding:22px}.rv-oh-public-intro{padding:27px}.rv-oh-stats{grid-template-columns:repeat(3,minmax(0,1fr))}.rv-oh-card{grid-template-columns:125px minmax(0,1fr)}}
+@media(max-width:550px){.rv-oh-stats>div{padding:11px}.rv-oh-stats b{font-size:22px}.rv-oh-card{grid-template-columns:1fr}.rv-oh-thumb{min-height:145px;max-height:220px}.rv-oh-poster-body{grid-template-columns:1fr}.rv-oh-poster-photo{height:260px}.rv-openhouse-poster{min-height:720px}.rv-oh-qr-panel{max-width:250px;margin:auto}.rv-oh-poster-dialog{padding:12px}.rv-oh-poster-toolbar .actions{width:100%}.rv-oh-poster-toolbar .actions button{flex:1}.rv-oh-poster-hero{padding:20px}.rv-oh-poster-hero strong{font-size:38px}.rv-oh-poster-body{padding:20px}.rv-oh-public>header{min-height:62px;padding:12px 16px}}
+@media print{
+ @page{size:letter portrait;margin:0}
+ body{background:white!important}
+ body *{visibility:hidden!important}
+ .rv-openhouse-poster,.rv-openhouse-poster *{visibility:visible!important}
+ .rv-openhouse-poster{position:fixed!important;inset:0!important;z-index:99999!important;width:8.5in!important;height:11in!important;min-height:0!important;max-width:none!important;margin:0!important;box-shadow:none!important;border-radius:0!important;print-color-adjust:exact!important;-webkit-print-color-adjust:exact!important}
+ .rv-oh-poster-photo{height:5.2in!important}.rv-oh-poster-body{padding:.4in!important;grid-template-columns:1fr 2.5in!important;gap:.25in!important}.rv-oh-qr{width:2.1in!important;max-width:none!important}
+ .rv-oh-poster-foot{padding:.17in!important}
+}
+
+@media print{
+ .modalback{position:static!important;display:block!important;background:none!important;backdrop-filter:none!important;overflow:visible!important;padding:0!important}
+ .rv-oh-poster-dialog{position:static!important;overflow:visible!important;max-height:none!important;width:auto!important;padding:0!important;background:none!important;box-shadow:none!important}
+}
