@@ -1,24 +1,19 @@
 import { domainToASCII } from 'node:url';
 import type { AgentSiteDraft } from './types';
 import { defaultSite, TEMPLATES } from './types';
-
 const hex = /^#[0-9a-fA-F]{6}$/;
 const slugRE = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
-
 function str(obj: Record<string, unknown>, name: string, max: number): string {
   const value = obj[name];
   if (typeof value !== 'string' || value.length > max) throw new Error(`${name} is invalid`);
   return value.trim();
 }
-
 function safeImageURL(v: string): string {
   if (!v) return '';
-  // Hosted media only. Adjust permitted providers to match your Supabase Storage.
   const u = new URL(v);
   if (u.protocol !== 'https:' || u.username || u.password) throw new Error('Images need HTTPS URLs');
   return u.toString();
 }
-
 export function validateDraft(obj: unknown): AgentSiteDraft {
   if (typeof obj !== 'object' || !obj || Array.isArray(obj)) throw new Error('Invalid site settings');
   const data = obj as Record<string, unknown>;
@@ -33,23 +28,26 @@ export function validateDraft(obj: unknown): AgentSiteDraft {
   const email = str(data, 'public_email', 160);
   if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw new Error('Invalid public email');
   if (typeof data.published !== 'boolean') throw new Error('Published must be true or false');
+  const linked = data.use_profile_identity !== false;
   return {
-    ...defaultSite,
-    slug,
-    display_name: str(data, 'display_name', 120),
-    brokerage_name: str(data, 'brokerage_name', 150),
-    tagline: str(data, 'tagline', 200),
-    biography: str(data, 'biography', 2500),
+    ...defaultSite, slug,
+    display_name: str(data,'display_name',120),
+    brokerage_name: str(data,'brokerage_name',150),
+    tagline: str(data,'tagline',200),
+    biography: str(data,'biography',2500),
     public_email: email,
-    public_phone: str(data, 'public_phone', 50),
-    headshot_url: safeImageURL(str(data, 'headshot_url', 1000)),
-    hero_image_url: safeImageURL(str(data, 'hero_image_url', 1000)),
+    public_phone: str(data,'public_phone',50),
+    headshot_url: safeImageURL(str(data,'headshot_url',1000)),
+    hero_image_url: safeImageURL(str(data,'hero_image_url',1000)),
     template: template as AgentSiteDraft['template'],
     primary_color, accent_color, background_color,
-    published: data.published,
+    published: data.published, use_profile_identity: linked,
+    // These fields are NEVER trusted from a linked website request.
+    professional_title: str(data,'professional_title',100),
+    license_number: str(data,'license_number',70),
+    headshot_path: '', logo_path: '',
   };
 }
-
 export function normalizeCustomDomain(input: unknown): string {
   if (typeof input !== 'string' || input.length > 253) throw new Error('Invalid domain');
   const trimmed = input.trim().toLowerCase().replace(/\.$/, '');

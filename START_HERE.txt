@@ -1,0 +1,69 @@
+REALVOLT v1.5.8 — AGENT WEBSITE + PROFILE SYNC + PUBLISH FIX
+==========================================================
+
+This ONE package supersedes earlier website patches. This is NOT a replacement
+for the entire CRM. Do not delete existing folders or Open House files.
+
+1. BACK UP your current GitHub main branch (download ZIP from GitHub).
+
+2. Unzip this package ON YOUR COMPUTER.
+
+3. Apply Supabase SQL in this order:
+   - Your existing 022_agent_marketing_profile_open_house_templates.sql
+      (only if not already done)
+   - supabase/migrations/024_rv_agent_website_studio.sql
+      (only if not already done)
+   - supabase/migrations/025_rv_agent_site_profile_link.sql
+      (REQUIRED NEW STEP, run once)
+
+4. Upload the EXTRACTED app, components, lib, and supabase folders to your
+   GitHub repository main branch, PRESERVING FOLDER STRUCTURE.
+   Upload every nested file, not just the folders. Also upload:
+   - app/layout.tsx
+   - proxy.ts (if absent from the repo)
+   Do NOT remove app/page.tsx, app/open-house-manager.tsx, or any CRM code.
+   If your platform uploads only individual files: browse to each matching
+   directory before uploading, then confirm filenames in GitHub.
+
+5. Deploy with Node 22 and npm run build (Next.js 16 standalone SSR).
+   This patch expects tsconfig.json @/* alias and next.config.mjs standalone
+   mode already installed from the prior configuration fix.
+
+6. Visit / on your deployed Hostinger URL. Sign in, click the new green
+   "My Agent Website" shortcut at bottom-right. Or directly visit
+   /agent-site-studio.
+
+7. Edit your headshot/bio under RealVolt > My profile & billing >
+   Your public agent profile. Press "Save marketing profile".
+
+8. In Website Studio, keep "Automatically use my public RealVolt profile" ON.
+   Choose Modern/Classic/Luxury, change colour scheme, enter a 3-45 character
+   slug, check Publish, then press "Save and check public link".
+   Do NOT open the public URL until a VERIFIED live link appears.
+
+9. Test /site/YOUR-SLUG in a private/incognito browser window.
+   Domain/subdomain automatic routing requires separate DNS, TLS and Hostinger
+   setup. The direct /site/YOUR-SLUG path works without custom domain setup.
+
+IMPORTANT:
+- If the save returns a 401, sign in again; the requests use the
+  existing Supabase session token rather than relying on cookies.
+- If it says migrations 022, 024, 025 are missing, apply them as above.
+- If the status API says "not public", check Supabase rv_agent_sites.published
+  and that the slug is saved; unpublished pages intentionally return 404.
+- New profile edits sync automatically to published pages through the
+  database trigger while use_profile_identity=true. Website-only themes
+  and hero photos remain editable independently.
+- For privacy, only PUBLIC agent fields are copied to the website. Your
+  brokerage billing and CRM customers are not exposed.
+
+NAVIGATION:
+The new bottom-right "My Agent Website" shortcut appears only when signed in
+on the main RealVolt home page. It does not replace the entire sidebar.
+A native sidebar integration needs editing the large app/page.tsx file and is
+best merged with a tested checkout; this safe shortcut does not risk it.
+
+VERSION & TEST STATUS:
+Source patch based on RealVolt v1.5.7 website package and inspected GitHub
+main file structure as of 2026-11-16. Not yet deployed/tested against your
+actual Supabase data or your full GitHub checkout.

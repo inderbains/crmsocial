@@ -1,9 +1,41 @@
-# RealVolt v1.5.7 — Consolidated Agent Websites
+# RealVolt v1.5.8 — Agent Website Studio & Live Profile Identity
 
-**Install:** Read `INSTALL_FIRST.txt` first. This is a complete website **module**, designed to layer onto the existing RealVolt app without replacing Open Houses, CRM, SignVolt, or transactions.
+This bundle includes the complete website module (`app/agent-site-studio`,
+`app/site`, `app/site-domain`, `app/api/agent-site`, components, `lib/rv-agent-site`,
+`proxy.ts`), a login-safe quick link, and SQL migrations 024 + 025.
 
-It combines the original three themes, editable primary/accent/background colours, live preview, public single-page website, and owner-only Supabase website settings. RealVolt's existing browser-based Supabase login is used rather than a missing `/login` route. Site edits require the user's validated access token and RLS checks; domain verification is a separate server operation.
+**What's fixed:**
 
-**Files:** `app/agent-site-studio`, `app/site/[slug]`, `app/site-domain/[hostname]`, `app/api/agent-site`, `components/rv-agent-site`, `lib/rv-agent-site`, Supabase migration `024_rv_agent_website_studio.sql`, and a host-routing `proxy.ts` that is disabled by default until DNS/SSL is configured.
+- Uses the existing signed-in Supabase access token for saves and domain actions.
+- Publish link appears only after a successful save and anonymous public query.
+- Website names, biography, professional title, phone, email, licence, headshot,
+  and logo can be connected to the public marketing profile already used by
+  Open House, through a database trigger.
+- A green "My Agent Website" button appears on the signed-in CRM home screen.
+- Modern, Classic, Luxury templates and custom colour themes remain available.
+- Nothing in Open House, CRM, transaction, SignVolt or Back Office is overwritten.
 
-**Important limitations:** No automatic Hostinger domain provisioning or SSL automation. DDF/MLS listing display and CRM lead forwarding are not connected. No code overwrites `app/page.tsx`, `app/open-house-manager.tsx`, or existing CRM.
+## Installation
+Read `START_HERE.txt` first. Do not upload the ZIP to GitHub directly.
+
+## Troubleshooting
+- A page `/site/your-slug` 404s if it isn't saved **and** published, or if an
+  anonymous reader cannot see the row under the SQL migration RLS policy.
+- If the Published toggle is changed but Save is not pressed, no live link is shown.
+- If the site opens but has no picture, check the saved public marketing profile
+  and that its `realvolt-agent-brand-public` Storage bucket exists (migration 022).
+- Profile fields come from `agent_workspace_profiles`; public media URLs use
+  the existing `lib/agent-profile.ts` helper.
+- No real custom domain is automatically assigned by this code; DNS and TLS
+  activation on Hostinger are separate.
+
+## Security notes
+- Supabase service-role keys must never be prefixed `NEXT_PUBLIC_`.
+- We intentionally never read office_agents financial, CRM or billing data.
+- The SQL trigger only updates the website owned by the edited public profile.
+- The public status endpoint only returns readiness for a published slug.
+
+## Verified
+- Package file presence and import path checks.
+- TypeScript parsed/transpiled locally where available.
+- Live production build, database migration and route smoke tests: **not run**.

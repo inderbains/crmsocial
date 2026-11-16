@@ -1,20 +1,22 @@
 import type { CSSProperties } from 'react';
 import type { AgentSite, AgentSiteDraft } from '@/lib/rv-agent-site/types';
+import { agentMediaUrl } from '@/lib/agent-profile';
 import styles from './AgentWebsite.module.css';
-
 const variants = { modern: styles.modern, classic: styles.classic, luxury: styles.luxury };
-
 export function AgentWebsite({ site, preview = false }: {site: AgentSite | AgentSiteDraft; preview?: boolean}) {
-  const css = {
-    '--rv-primary': site.primary_color,
-    '--rv-accent': site.accent_color,
-    '--rv-background': site.background_color,
-  } as CSSProperties;
+  const css = {'--rv-primary': site.primary_color, '--rv-accent': site.accent_color,
+    '--rv-background': site.background_color} as CSSProperties;
   const emailLink = site.public_email ? `mailto:${site.public_email}` : undefined;
   const phoneLink = site.public_phone ? `tel:${site.public_phone.replace(/[^+\d]/g, '')}` : undefined;
+  const storageUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
+  const headshot = site.use_profile_identity && site.headshot_path
+    ? agentMediaUrl(storageUrl,site.headshot_path) : site.headshot_url;
+  const logo = site.use_profile_identity && site.logo_path
+    ? agentMediaUrl(storageUrl,site.logo_path) : '';
+  const title = site.professional_title || 'REALTOR®';
   return <main className={`${styles.website} ${variants[site.template]}`} style={css}>
     <nav className={styles.nav}>
-      <div className={styles.logoMark}>{site.display_name || 'Your Name'}<small>{site.brokerage_name || 'Real Estate'}</small></div>
+      <div className={styles.logoMark}>{logo && <img className={styles.brandLogo} src={logo} alt="Agent branding logo"/>}{site.display_name || 'Your Name'}<small>{site.brokerage_name || 'Real Estate'}</small></div>
       <a href={emailLink || '#contact'} className={styles.navContact}>Contact</a>
     </nav>
     <section className={styles.hero}>
@@ -25,14 +27,15 @@ export function AgentWebsite({ site, preview = false }: {site: AgentSite | Agent
         <a className={styles.button} href={emailLink || '#contact'}>Start a conversation</a>
       </div>
       <div className={styles.heroVisual}>
-        {site.hero_image_url ? <img src={site.hero_image_url} alt="Beautiful home" /> : <div className={styles.placeholder}><span>HOME</span><b>Find your place.</b></div>}
+        {site.hero_image_url ? <img src={site.hero_image_url} alt="Featured home"/> : <div className={styles.placeholder}><span>HOME</span><b>Find your place.</b></div>}
       </div>
     </section>
     <section className={styles.about}>
-      {site.headshot_url ? <img className={styles.headshot} src={site.headshot_url} alt={site.display_name || 'Agent portrait'} /> : <div className={styles.initials}>{(site.display_name || 'A').slice(0,1)}</div>}
-      <div><span className={styles.eyebrow}>YOUR REALTOR®</span>
+      {headshot ? <img className={styles.headshot} src={headshot} alt={`${site.display_name || 'Agent'} portrait`} /> : <div className={styles.initials}>{(site.display_name || 'A').slice(0,1)}</div>}
+      <div><span className={styles.eyebrow}>{title.toUpperCase()}</span>
         <h2>Meet {site.display_name || 'Your Agent'}</h2>
         <p>{site.biography || 'Local market insight, clear communication, and guidance from your first question to your closing day.'}</p>
+        {site.license_number && <p className={styles.licence}>Licence: {site.license_number}</p>}
       </div>
     </section>
     <section className={styles.contact} id="contact"><h2>Let’s talk real estate.</h2>
@@ -45,6 +48,6 @@ export function AgentWebsite({ site, preview = false }: {site: AgentSite | Agent
     </section>
     <footer className={styles.footer}><span>© {new Date().getFullYear()} {site.display_name || 'Agent Website'}</span>
       <span>{site.brokerage_name || 'Real Estate'}</span></footer>
-    {preview && <div className={styles.previewTag}>LIVE DESIGN PREVIEW</div>}
+    {preview && <div className={styles.previewTag}>DESIGN PREVIEW</div>}
   </main>;
 }
