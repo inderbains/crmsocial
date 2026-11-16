@@ -1,0 +1,53 @@
+REALVOLT v1.5.7 - AGENT WEBSITE COMPLETE (ONE CONSOLIDATED UPLOAD)
+=================================================================
+This is the complete WEBSITE MODULE, not the whole RealVolt CRM.
+KEEP: app/page.tsx, app/open-house-manager.tsx, CRM, SignVolt, Back Office,
+Transactions and existing Supabase tables. NEVER delete those.
+
+HOW TO INSTALL WITH GITHUB WEB (no command line required)
+1. Backup your existing repo: GitHub -> Code -> Download ZIP (recommended).
+2. Extract RealVolt_v1.5.7_Agent_Website_COMPLETE.zip on your computer.
+3. Open github.com/inderbains/crmsocial and select branch main.
+4. Add file -> Upload files; drag the extracted 'app', 'components', 'lib',
+   'supabase' FOLDERS and proxy.ts to the repository ROOT.
+   Confirm the folder paths inside GitHub are preserved (not nested under
+   RealVolt_v1.5.7_Agent_Website_COMPLETE/ or inside another app/ folder).
+   GitHub's browser upload may refuse replacing files of identical names;
+   if so edit/replace those specific files in GitHub, or use a Git client.
+5. COMMIT changes to main, then deploy in Hostinger.
+6. Run the SQL migration in Supabase SQL Editor ONLY if migration 024 has not
+   already been applied. It is located in supabase/migrations/
+   024_rv_agent_website_studio.sql. Do not run other old migrations blindly.
+7. Confirm Hostinger has NEXT_PUBLIC_SUPABASE_URL and
+   NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY. Optional, server-side only:
+   SUPABASE_SERVICE_ROLE_KEY for TXT domain verification.
+8. Visit https://YOUR-CURRENT-REALVOLT-DOMAIN/agent-site-studio
+   If signed out, use the login on '/' then return to /agent-site-studio.
+9. Choose Modern/Classic/Luxury; select green+orange or another palette,
+   fill agent name, slug, phone/email; Save; turn Publish on; Save again.
+10. Test the public website: https://YOUR-CURRENT-REALVOLT-DOMAIN/site/YOUR-SLUG
+    This direct link works without DNS or custom domain setup.
+
+CUSTOM DOMAIN IS NOT AUTO-CONNECTED
+- Domain request -> DNS TXT verification -> connect the domain to Hostinger
+  and issue HTTPS/SSL -> manually activate the domain as admin.
+- Supplied proxy.ts is SAFE BY DEFAULT: it won't rewrite any hostname unless
+  you explicitly turn on wildcard subdomains or whitelist a custom hostname.
+- When ready, configure AGENT_SITE_APP_HOSTS with the actual CRM host(s),
+  AGENT_SITE_BASE_DOMAIN=realvolt.ca, and then
+  AGENT_SITE_SUBDOMAINS_ENABLED=true after wildcard DNS/TLS is in place.
+- For a custom website hostname attached to hosting, add its exact hostname
+  to AGENT_SITE_CUSTOM_HOSTS, comma-separated.
+- After TXT is verified and HTTPS works, an authorized administrator can
+  advance status to 'active' only for the verified domain.
+- Adding a CNAME or TXT record by itself does not activate a website.
+
+IMPORTANT
+- This bundle replaces only website files by matching relative paths.
+- The successful host build you showed already proves Next.js can serve
+  the dynamic routes. Do NOT re-upload old v1.5.6 config or login patches.
+- No guarantee of successful deployment without testing against your full
+  current repo and database. If build errors appear, send the first error.
+- Website templates, colours, site publishing and domain requests are included.
+  Live CREA DDF feeds, listing sync, MLS display, lead routing into CRM,
+  social-post automation and brokerage-wide website admin are NOT connected.

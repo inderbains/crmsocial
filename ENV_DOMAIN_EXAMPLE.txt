@@ -1,0 +1,17 @@
+# Existing public Supabase variables in Hostinger:
+NEXT_PUBLIC_SUPABASE_URL=https://YOUR_PROJECT.supabase.co
+NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=YOUR_PUBLIC_KEY
+
+# Keep this server-only; needed only for TXT domain verification:
+SUPABASE_SERVICE_ROLE_KEY=YOUR_SERVICE_ROLE_KEY
+
+# Optional: once subdomain DNS and TLS are ready:
+AGENT_SITE_BASE_DOMAIN=realvolt.ca
+AGENT_SITE_APP_HOSTS=realvolt.ca,www.realvolt.ca,app.realvolt.ca,YOUR_HOSTINGER_APP_HOST
+AGENT_SITE_SUBDOMAINS_ENABLED=false
+
+# Optional: only when a custom hostname is added to hosting with HTTPS:
+AGENT_SITE_CUSTOM_HOSTS=
+
+# Display-only default for the URL in Studio:
+NEXT_PUBLIC_AGENT_SITE_BASE_DOMAIN=realvolt.ca
