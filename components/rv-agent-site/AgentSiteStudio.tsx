@@ -1,7 +1,7 @@
 'use client';
 import { useState } from 'react';
 import { getSupabase } from '@/lib/supabase';
-import { AgentWebsite } from './AgentWebsite';
+import { AgentWebsite, SITE_PAGES, type SitePage } from './AgentWebsite';
 import type { AgentSite,AgentSiteDomain,AgentSiteDraft,LinkedAgentProfile } from '@/lib/rv-agent-site/types';
 import { defaultSite,palettes } from '@/lib/rv-agent-site/types';
 import styles from './AgentSiteStudio.module.css';
@@ -24,6 +24,7 @@ export function AgentSiteStudio({initial,initialDomains,profile}:{
     ...defaultSite,...initial,
   } : withProfile({...defaultSite,slug:generatedSlug(profile.full_name)},profile);
   const [site,setSite]=useState<AgentSiteDraft>(initialDraft);
+  const [previewPage,setPreviewPage]=useState<SitePage>('home');
   const [domains,setDomains]=useState(initialDomains);
   const [domain,setDomain]=useState('');
   const [message,setMessage]=useState('');
@@ -154,7 +155,8 @@ export function AgentSiteStudio({initial,initialDomains,profile}:{
       </section>
     </div><div className={styles.preview}>
       <div className={styles.previewTitle}>Website design preview <span>{site.template.toUpperCase()}</span></div>
-      <div className={styles.previewFrame}><AgentWebsite site={displayed} preview/></div>
+      <div className={styles.pagePreviewNav} aria-label="Choose website page to preview">{SITE_PAGES.map(p=><button type="button" key={p} className={previewPage===p ? styles.pagePreviewActive : ''} onClick={()=>setPreviewPage(p)}>{p === 'home' ? 'Home' : p === 'listings' ? 'Properties' : p.charAt(0).toUpperCase()+p.slice(1)}</button>)}</div>
+      <div className={styles.previewFrame}><AgentWebsite site={displayed} preview page={previewPage}/></div>
     </div></div>
   </div>;
 }

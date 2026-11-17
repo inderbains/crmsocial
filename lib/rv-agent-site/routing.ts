@@ -1,9 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 
 /**
- * Host-based website routing is OFF by default. Enable ONLY after DNS and TLS
- * are configured and the real CRM hostname is excluded. Direct /site/slug
- * links work without this routing.
+ * Custom-domain routing is OFF unless the hosting and DNS settings are configured.
+ * Paths are preserved, so /about, /buyers, etc. resolve on approved domains.
  */
 export function rewriteAgentWebsite(req: NextRequest): NextResponse | null {
   const host=(req.headers.get('host') || '').toLowerCase().replace(/:\d+$/, '').replace(/\.$/, '');
@@ -17,14 +16,14 @@ export function rewriteAgentWebsite(req: NextRequest): NextResponse | null {
     .toLowerCase().split(',').map(v=>v.trim()).filter(Boolean));
   if (crmHosts.has(host) || host.endsWith('.hostingersite.com') || host.endsWith('.vercel.app')) return null;
 
-  let destination:string | null=null;
+  const suffix = pathname === '/' ? '' : pathname;
+  let destination: string | null = null;
   if (process.env.AGENT_SITE_SUBDOMAINS_ENABLED === 'true' && host.endsWith(`.${base}`)) {
     const slug=host.slice(0,-base.length-1);
-    if (/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(slug)) destination=`/site/${slug}`;
+    if (/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(slug)) destination=`/site/${slug}${suffix}`;
   } else {
-    // Only route custom domains explicitly attached to this hosting project.
     const approved=(process.env.AGENT_SITE_CUSTOM_HOSTS || '').toLowerCase().split(',').map(v=>v.trim());
-    if (approved.includes(host) && /^(?:[a-z0-9-]+\.)+[a-z]{2,63}$/.test(host)) destination=`/site-domain/${host}`;
+    if (approved.includes(host) && /^(?:[a-z0-9-]+\.)+[a-z]{2,63}$/.test(host)) destination=`/site-domain/${host}${suffix}`;
   }
   if (!destination) return null;
   const url=req.nextUrl.clone();url.pathname=destination;
