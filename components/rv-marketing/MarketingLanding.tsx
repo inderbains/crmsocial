@@ -8,6 +8,7 @@ import {
 } from 'lucide-react';
 import {getSupabase} from '@/lib/supabase';
 import styles from './MarketingLanding.module.css';
+import RealVoltLogo from '@/components/rv-brand/RealVoltLogo';
 
 type AuthMode = 'login' | 'signup' | 'reset';
 type Plan = 'agent' | 'brokerage';
@@ -117,8 +118,7 @@ export default function MarketingLanding() {
       <header className={styles.topbar}>
         <div className={styles.navInner}>
           <a className={styles.brand} href="#top" aria-label="RealVolt homepage">
-            <span className={styles.brandIcon}><Zap size={21} fill="currentColor" strokeWidth={2.6}/></span>
-            <span>real<span className={styles.brandVolt}>volt</span><span className={styles.brandDot}>.</span></span>
+            <RealVoltLogo size="medium"/>
           </a>
           <nav className={styles.desktopNav} aria-label="Main navigation">
             <a href="#platform">Platform</a>
@@ -288,7 +288,7 @@ export default function MarketingLanding() {
       </main>
       <footer className={styles.footer}>
         <div className={styles.maxWidth}>
-          <div className={styles.footerBrand}><span className={styles.brandIcon}><Zap size={17} fill="currentColor"/></span><span>realvolt<span className={styles.brandDot}>.</span></span></div>
+          <div className={styles.footerBrand}><RealVoltLogo size="small" onDark/></div>
           <span>Real estate, thoughtfully connected.</span>
           <a href="#top">Back to top ↑</a>
         </div>
@@ -296,7 +296,7 @@ export default function MarketingLanding() {
 
       {mode && <div className={styles.modalBackdrop} onMouseDown={event => {if (event.target === event.currentTarget && !busy) setMode(null);}}>
         <div className={styles.authDialog} role="dialog" aria-modal="true" aria-labelledby="rv-auth-heading">
-          <div className={styles.authTop}><span className={styles.authLogo}><Zap size={18} fill="currentColor"/> realvolt.</span><button type="button" className={styles.closeBtn} onClick={() => !busy && setMode(null)} aria-label="Close"><X size={21}/></button></div>
+          <div className={styles.authTop}><span className={styles.authLogo}><RealVoltLogo size="small"/></span><button type="button" className={styles.closeBtn} onClick={() => !busy && setMode(null)} aria-label="Close"><X size={21}/></button></div>
           <div className={styles.authHeading}><span className={styles.sectionKicker}>{mode === 'login' ? 'WELCOME BACK' : mode === 'reset' ? 'ACCOUNT RECOVERY' : 'WELCOME TO REALVOLT'}</span><h2 id="rv-auth-heading">{mode === 'login' ? 'Log in to your workspace.' : mode === 'reset' ? 'Reset your password.' : 'Create your RealVolt account.'}</h2><p>{mode === 'signup' ? (plan === 'brokerage' ? 'Start with a login. Brokerage subscription setup will follow when billing is available.' : 'Create a login and explore RealVolt. Subscription activation will follow when available.') : mode === 'reset' ? 'We’ll send a password reset link to your email address.' : 'Pick up right where you left off.'}</p></div>
           <form className={styles.authForm} onSubmit={authenticate}>
             <label htmlFor="rv-auth-email">Email address</label>

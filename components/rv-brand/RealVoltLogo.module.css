@@ -1,0 +1,11 @@
+/* RealVolt identity: orange bolt tile, lime outline, dark-green wordmark. */
+.logo{--rv-logo-orange:#da2c00;--rv-logo-lime:#d8f38a;--rv-logo-forest:#193e32;--rv-logo-dot:#85a06a;display:inline-flex;align-items:center;gap:8px;vertical-align:middle;white-space:nowrap;max-width:100%;line-height:1;flex-shrink:0;font-family:Manrope,'DM Sans',Arial,sans-serif!important;font-weight:800!important;letter-spacing:-.055em!important;color:var(--rv-logo-forest)!important}
+.icon{display:grid;place-items:center;background:var(--rv-logo-orange)!important;color:var(--rv-logo-lime)!important;border-radius:28%;flex:none;box-shadow:none}
+.icon svg{width:56%;height:56%;stroke:currentColor;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round;fill:none;display:block}
+.wordmark{display:inline-block;color:var(--rv-logo-forest)!important;line-height:1!important}
+.period{color:var(--rv-logo-dot)!important}
+.small{font-size:21px!important}.small .icon{width:32px;height:32px}
+.medium{font-size:27px!important}.medium .icon{width:40px;height:40px}
+.large{font-size:32px!important}.large .icon{width:49px;height:49px}
+.onDark .wordmark{color:white!important}.onDark .period{color:var(--rv-logo-lime)!important}
+@media(max-width:480px){.medium{font-size:23px!important}.medium .icon{height:35px;width:35px}}
