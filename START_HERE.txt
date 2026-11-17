@@ -1,71 +1,94 @@
-RealVolt v1.6.2 — Contact Form -> Agent CRM + v1.6.1 CSS
-=======================================================
+REALVOLT v1.7.0 — PROFESSIONAL PUBLIC HOMEPAGE + LOGIN + PRICING
+=================================================================
 
-Based on your crmsocial-main (1).zip and your successful v1.6.0 multi-page
-website update. This is a SMALL, targeted patch; it does NOT replace CRM,
-Open Houses, SignVolt, the RealVolt homepage, menus, or site themes.
+This update adds a polished PUBLIC marketing homepage and preserves the
+existing RealVolt workspace under /workspace.
 
-WHAT IT DOES
-------------
-- Each PUBLISHED agent website sends its Contact form to the correct agent's
-  existing public.crm_contacts table (owner_user_id from rv_agent_sites).
-- New email: creates a CRM contact, Stage = New, Source = Agent Website,
-  Type = Buyer / Seller / Other based on interest.
-- Existing email for that SAME agent: preserves existing contact stage and
-  consent, appends a CRM note with the new message (no duplicate contact).
-- Each form message is added to public.crm_notes under the same agent.
-- No email follow-up, texting, notifications or marketing automations.
-- Includes v1.6.1 WEBSITE-ONLY full-width CSS to remove CRM sidebar spacing.
-- No cross-agent lead sharing; no visitor can specify the recipient user ID.
-- A basic per-site rate limit and invisible honeypot reduce spam.
-- Website Studio preview cannot submit a public form until published.
+ROUTES
+------
+/                     Public marketing homepage, plan prices, Log in, Get started
+/workspace            Authenticated RealVolt dashboard (CRM, SignVolt, Open Houses, etc.)
+/agent-site-studio    Existing agent website builder, unchanged
+/site/[slug]          Existing public agent websites, unchanged
 
-INSTALL (ORDER MATTERS)
------------------------
-1. BACK UP your GitHub main branch or download a fresh ZIP first.
-2. In your existing Supabase project, confirm migrations 003_crm.sql, 024
-   and 025 have already run. Apply only the NEW SQL migration:
-   supabase/migrations/026_rv_agent_site_crm_inquiries.sql
-   in Supabase SQL Editor. You do not need to re-run previous migrations.
-3. Hostinger: ensure environment variable SUPABASE_SERVICE_ROLE_KEY contains
-   your Supabase project's secret SERVICE ROLE key. Add it ONLY in server
-   environment settings. NEVER use NEXT_PUBLIC_ with this key; NEVER commit
-   the key or an .env file to GitHub. The existing NEXT_PUBLIC_SUPABASE_URL and
-   NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY also need to be correctly configured.
-4. Extract this ZIP. In GitHub, upload these files at EXACT matching paths:
-   REPLACE components/rv-agent-site/AgentWebsite.tsx
-   REPLACE components/rv-agent-site/AgentWebsite.module.css
-   REPLACE components/rv-agent-site/ContactForm.tsx
-   ADD     app/api/agent-site/inquiry/route.ts
-   ADD     supabase/migrations/026_rv_agent_site_crm_inquiries.sql (version history only)
-   DO NOT upload any of these files at the repository root.
-   The SQL migration in GitHub is for tracking; it must ALSO be run in Supabase.
-5. Commit to main. Deploy on Hostinger with npm run build (output .next).
-6. Open Agent Website Studio -> publish site, then visit its public
-   /site/YOUR-SLUG/contact page. Send a test lead using an email you control.
-7. Log into that site's AGENT account -> CRM -> Contacts. You should see:
-   Source: Agent Website | Stage: New; open the contact to see the message
-   as a Note. Resend with the SAME email: it should append another note
-   without adding another contact. Test another agent's website and confirm
-   leads do not appear in the first agent's CRM.
-8. Confirm the left blank gutter has disappeared on Home AND Contact pages.
+PRICES DISPLAYED
+----------------
+Individual Agent:     CAD $49.99/month
+Full Brokerage:       CAD $69.99/agent/month
+Taxes extra. Seats calculator is an estimate only.
 
-IMPORTANT LIMITATIONS / SAFETY
-------------------------------
-- The server route needs SUPABASE_SERVICE_ROLE_KEY. Without it the contact
-  form shows a useful error rather than silently pretending to save.
-- An agent site must be published, and its owner must exist in auth.users.
-- CRM schema 003 must be present. There is no custom admin-sharing expansion;
-  data remains in the agent-owned CRM under existing RLS rules.
-- Website inquiries are not an opt-in for mass marketing.
-- The basic per-site limit is 30 successful submissions per 10 minutes,
-  applied in the database; heavier bot traffic needs CAPTCHA/edge controls.
-- SQL is transactional. If creating the contact/note fails, it rolls back.
-- This does not add MLS/DDF listings, follow-up reminders, email sending,
-  automatic response messages, or website analytics.
-- This is source tested but not deployed or live-tested against your Supabase.
-- Retain 026 migration file in git; later clean-up of rate limit buckets may
-  be configured as maintenance if volume warrants.
+IMPORTANT: This update DOES NOT charge credit cards, create billing
+subscriptions, allocate brokerage seats, or enforce paid-plan access.
+Get Started creates an account using your existing Supabase Auth.
+Billing and entitlement controls must be implemented and verified later.
 
-If deployment fails, send the full Hostinger build error and do NOT delete
-or overwrite the core RealVolt app/page.tsx or lib/supabase.ts files.
+EXACT FILES TO UPLOAD / REPLACE
+-------------------------------
+app/page.tsx                                 REPLACE (public homepage)
+app/layout.tsx                               REPLACE (removes unwanted floating website button)
+app/realvolt-workspace.tsx                   ADD (existing dashboard preserved here)
+app/workspace/page.tsx                       ADD (new dashboard route)
+app/workspace-home.tsx                       REPLACE (Agent Website card in app dashboard)
+components/rv-marketing/MarketingLanding.tsx        ADD
+components/rv-marketing/MarketingLanding.module.css ADD
+
+HOW TO UPLOAD
+-------------
+1. Back up your current GitHub repository or make a branch first.
+2. Unzip this package ON YOUR COMPUTER.
+3. In your GitHub repository, navigate to each matching folder and
+   upload the corresponding file, preserving the exact path.
+4. DO NOT upload files into the GitHub root. DO NOT upload the ZIP itself.
+5. Do NOT remove your app, components, or lib directories.
+6. Commit changes to main. Redeploy on Hostinger.
+7. Open / and test public homepage.
+8. Open /workspace directly (signed out) and test login.
+9. Log in via homepage and confirm /workspace shows your existing CRM
+   dashboard and that CRM, Transactions, Open Houses and SignVolt still work.
+10. Click Agent Website from the dashboard and verify /agent-site-studio.
+
+WHAT HAS NOT BEEN CHANGED
+-------------------------
+No database migrations. No changes to CRM contacts, open house records,
+e-signatures, transactions, agent website database, domain, or inquiry API.
+
+SIGN-IN CONFIGURATION
+---------------------
+Existing browser-side Supabase credentials must still be set:
+NEXT_PUBLIC_SUPABASE_URL
+NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY
+
+Check Supabase Auth > URL Configuration includes:
+https://YOUR-DOMAIN/workspace  (redirect allowlist for signup/reset)
+
+If RealVolt already has a password recovery flow, it is preserved in
+the existing dashboard component under /workspace.
+
+SECURITY
+--------
+Do not put your Supabase service-role/secret key in GitHub or in any
+NEXT_PUBLIC_ variable. This page uses only the public Supabase client.
+Your existing server/API role access policies are not modified by this patch.
+They must be audited separately before selling paid subscriptions.
+
+WARNING FOR EXISTING WEBSITE OWNERS
+-----------------------------------
+AgentSiteStudio currently has a link 'Back to RealVolt' pointing to /.
+Since / is now the PUBLIC homepage, use the 'Open dashboard' link in
+that page (when signed in), or go directly to /workspace. You may later
+update the Studio's back-link to /workspace for convenience.
+
+LOCAL VALIDATION
+----------------
+- TSX syntax checked using installed TypeScript parser.
+- File path/import mapping checked against the uploaded project archive.
+- Layout mockup rendered in headless Chromium at desktop/mobile widths.
+- Full Next.js production build and live Supabase login could NOT be run
+  in this offline environment. Run npm run build in Hostinger and test.
+
+PREVIEW
+-------
+PREVIEW.html is a static design mockup only. It is not the live website
+and its buttons do not perform authentication. The real component does.
+
+This is a PUBLIC PAGE and login-flow patch, not a payment system.
