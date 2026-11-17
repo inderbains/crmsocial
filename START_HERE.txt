@@ -1,80 +1,71 @@
-RealVolt v1.6.0 — Professional Multi-Page Agent Websites
-========================================================
+RealVolt v1.6.2 — Contact Form -> Agent CRM + v1.6.1 CSS
+=======================================================
 
-Purpose: upgrade ONLY the public Agent Website pages, website Studio preview,
-and approved custom-domain rewrites. No CRM, Open Houses, SignVolt, main
-homepage, workspace menu, or Supabase schema files are included.
+Based on your crmsocial-main (1).zip and your successful v1.6.0 multi-page
+website update. This is a SMALL, targeted patch; it does NOT replace CRM,
+Open Houses, SignVolt, the RealVolt homepage, menus, or site themes.
 
-IMPORTANT: This patch is based on the crmsocial-main (1).zip uploaded earlier.
-If you have modified the website files since that ZIP, review the changes before
-replacing them. Do NOT upload the whole archive to GitHub as a ZIP.
+WHAT IT DOES
+------------
+- Each PUBLISHED agent website sends its Contact form to the correct agent's
+  existing public.crm_contacts table (owner_user_id from rv_agent_sites).
+- New email: creates a CRM contact, Stage = New, Source = Agent Website,
+  Type = Buyer / Seller / Other based on interest.
+- Existing email for that SAME agent: preserves existing contact stage and
+  consent, appends a CRM note with the new message (no duplicate contact).
+- Each form message is added to public.crm_notes under the same agent.
+- No email follow-up, texting, notifications or marketing automations.
+- Includes v1.6.1 WEBSITE-ONLY full-width CSS to remove CRM sidebar spacing.
+- No cross-agent lead sharing; no visitor can specify the recipient user ID.
+- A basic per-site rate limit and invisible honeypot reduce spam.
+- Website Studio preview cannot submit a public form until published.
 
-Installation using GitHub:
- 1. Download + EXTRACT this zip locally.
- 2. For each file in this package, open the corresponding folder in GitHub.
- 3. Replace matching files IN THEIR SAME FOLDERS. For new pages, create the
-    nested folders exactly as listed below. Do not put page.tsx at repo root.
- 4. Commit to the main branch and deploy with npm run build on Hostinger.
- 5. Check the deployment log for routes /site/[slug]/[page] and
-    /site-domain/[hostname]/[page].
+INSTALL (ORDER MATTERS)
+-----------------------
+1. BACK UP your GitHub main branch or download a fresh ZIP first.
+2. In your existing Supabase project, confirm migrations 003_crm.sql, 024
+   and 025 have already run. Apply only the NEW SQL migration:
+   supabase/migrations/026_rv_agent_site_crm_inquiries.sql
+   in Supabase SQL Editor. You do not need to re-run previous migrations.
+3. Hostinger: ensure environment variable SUPABASE_SERVICE_ROLE_KEY contains
+   your Supabase project's secret SERVICE ROLE key. Add it ONLY in server
+   environment settings. NEVER use NEXT_PUBLIC_ with this key; NEVER commit
+   the key or an .env file to GitHub. The existing NEXT_PUBLIC_SUPABASE_URL and
+   NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY also need to be correctly configured.
+4. Extract this ZIP. In GitHub, upload these files at EXACT matching paths:
+   REPLACE components/rv-agent-site/AgentWebsite.tsx
+   REPLACE components/rv-agent-site/AgentWebsite.module.css
+   REPLACE components/rv-agent-site/ContactForm.tsx
+   ADD     app/api/agent-site/inquiry/route.ts
+   ADD     supabase/migrations/026_rv_agent_site_crm_inquiries.sql (version history only)
+   DO NOT upload any of these files at the repository root.
+   The SQL migration in GitHub is for tracking; it must ALSO be run in Supabase.
+5. Commit to main. Deploy on Hostinger with npm run build (output .next).
+6. Open Agent Website Studio -> publish site, then visit its public
+   /site/YOUR-SLUG/contact page. Send a test lead using an email you control.
+7. Log into that site's AGENT account -> CRM -> Contacts. You should see:
+   Source: Agent Website | Stage: New; open the contact to see the message
+   as a Note. Resend with the SAME email: it should append another note
+   without adding another contact. Test another agent's website and confirm
+   leads do not appear in the first agent's CRM.
+8. Confirm the left blank gutter has disappeared on Home AND Contact pages.
 
-Paths included:
- components/rv-agent-site/AgentWebsite.tsx  (replace)
- components/rv-agent-site/AgentWebsite.module.css  (replace)
- components/rv-agent-site/ContactForm.tsx  (NEW)
- components/rv-agent-site/AgentSiteStudio.tsx  (replace)
- components/rv-agent-site/AgentSiteStudio.module.css  (replace)
- app/site/[slug]/[page]/page.tsx  (NEW)
- app/site-domain/[hostname]/page.tsx  (replace)
- app/site-domain/[hostname]/[page]/page.tsx  (NEW)
- lib/rv-agent-site/routing.ts  (replace)
+IMPORTANT LIMITATIONS / SAFETY
+------------------------------
+- The server route needs SUPABASE_SERVICE_ROLE_KEY. Without it the contact
+  form shows a useful error rather than silently pretending to save.
+- An agent site must be published, and its owner must exist in auth.users.
+- CRM schema 003 must be present. There is no custom admin-sharing expansion;
+  data remains in the agent-owned CRM under existing RLS rules.
+- Website inquiries are not an opt-in for mass marketing.
+- The basic per-site limit is 30 successful submissions per 10 minutes,
+  applied in the database; heavier bot traffic needs CAPTCHA/edge controls.
+- SQL is transactional. If creating the contact/note fails, it rolls back.
+- This does not add MLS/DDF listings, follow-up reminders, email sending,
+  automatic response messages, or website analytics.
+- This is source tested but not deployed or live-tested against your Supabase.
+- Retain 026 migration file in git; later clean-up of rate limit buckets may
+  be configured as maintenance if volume warrants.
 
-DO NOT TOUCH:
- app/page.tsx
- app/workspace-home.tsx
- app/agent-site-studio/page.tsx
- lib/supabase.ts
- app/open-house/*
- app/api/agent-site/*
- proxy.ts
- any existing CRM, SignVolt or accounting files
-
-Public routes after publishing:
- /site/your-slug                   Home
- /site/your-slug/listings          Properties
- /site/your-slug/about             About
- /site/your-slug/buyers            Buyers
- /site/your-slug/sellers           Sellers
- /site/your-slug/contact           Contact
-
-Agent Site Studio: /agent-site-studio
-Preview now includes a selector for all 6 pages, with existing Modern, Classic,
-Luxury and editable colours, and links to the public RealVolt agent profile.
-
-No new Supabase migration is required for THIS update.
-Migrations 024 and 025 must already be applied for the earlier Agent Website
-module to work correctly. This patch does not change those migrations.
-
-Limitations:
- - Listings page intentionally does NOT invent listings. Live DDF/MLS listing
-   search requires a separate approved feed integration.
- - Contact form uses a mailto: link to prepare an email in the VISITOR'S email
-   app; nothing is submitted to the CRM or sent automatically. A server-side
-   lead capture endpoint with abuse protection and brokerage tenancy is a
-   separate integration.
- - Custom domains only work once HTTPS, DNS, approved host mapping and
-   existing application environment flags are correctly configured.
- - The built-in architectural vector is a decorative fallback. Agents should
-   upload an authorized property/lifestyle photo via their Hero Photo URL.
- - Always keep public profile and brokerage information factually accurate.
-
-Testing checklist:
- [ ] Successful Next.js + TypeScript build
- [ ] RealVolt main dashboard, CRM and Open Houses still work
- [ ] /agent-site-studio loads for authenticated user
- [ ] Preview tabs work for each page
- [ ] Public /site/SLUG loads after publishing
- [ ] /site/SLUG/about, /listings, /buyers, /sellers, /contact work
- [ ] Contact mailto opens email draft
- [ ] Mobile navigation works
- [ ] Custom domain paths work only after DNS/SSL setup
+If deployment fails, send the full Hostinger build error and do NOT delete
+or overwrite the core RealVolt app/page.tsx or lib/supabase.ts files.

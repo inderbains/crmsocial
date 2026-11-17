@@ -12,3 +12,61 @@
 @media(max-width:1100px){.headerInner{padding:16px 24px}.desktopNav{gap:12px}.desktopNav a{font-size:12px}.headerCta{display:none}.hero{min-height:540px}.heroCopy{padding:60px 36px}.serviceGrid{gap:12px}.featureCopy{padding:65px 40px}.steps{grid-template-columns:repeat(2,1fr)}}
 @media(max-width:800px){.desktopNav{display:none}.mobileMenu{display:block}.headerInner{min-height:80px}.brandLogo{width:65px;max-height:48px}.hero{grid-template-columns:1fr}.heroCopy{padding:60px 26px 35px}.hero h1{font-size:clamp(43px,9vw,64px)}.heroFoot{margin-top:40px}.heroArt{min-height:370px}.heroOverlay{bottom:24px;left:24px}.trustStrip{flex-wrap:wrap;gap:12px 24px}.serviceGrid{grid-template-columns:1fr}.serviceCard,.infoCard{min-height:230px}.serviceCard h3,.infoCard h3{margin-top:28px}.feature,.listingEmpty,.aboutGrid,.contactGrid{grid-template-columns:1fr}.featureVisual{min-height:340px;max-height:500px}.featureCopy{padding:65px 26px}.twoColumns{grid-template-columns:1fr;gap:12px}.contactBanner{flex-direction:column;align-items:flex-start}.listingArt{height:300px}.aboutPortrait{height:390px}.footerTop{flex-direction:column}.footer nav{max-width:400px}.footerBottom{flex-direction:column}.pageHero{min-height:330px}.pageHeroLine{display:none}}
 @media(max-width:520px){.headerInner{padding:15px 17px}.brand{gap:8px;min-width:0}.brandName strong{font-size:14px}.brandName small{font-size:8px}.brandLogo{width:52px}.mobileMenu summary{font-size:12px}.hero h1,.pageHero h1{font-size:43px}.heroCopy>p{font-size:15px}.primaryButton,.secondaryButton{gap:18px;padding:13px 16px}.trustStrip{display:none}.heroOverlay{left:15px;right:15px;bottom:18px}.section{padding:65px 22px}.serviceCard{padding:25px}.steps{grid-template-columns:1fr}.contactForm{padding:25px 18px}.formRow{grid-template-columns:1fr}.footer nav{grid-template-columns:repeat(2,1fr)}.contactBanner{padding:55px 23px}.pageHero{padding:70px 22px}.heroArt{min-height:300px}}
+
+/* RealVolt v1.6.1: isolate public pages from the CRM's global dashboard rules.
+   The CRM's globals.css sets main{margin-left:235px;padding:...} and
+   header{height:88px}, which shift every public agent website page right. */
+.website > main {
+  margin: 0 !important;
+  padding: 0 !important;
+  width: 100% !important;
+  max-width: none !important;
+  min-width: 0;
+  display: block;
+}
+.website > header {
+  display: block;
+  height: auto !important;
+  min-height: 0;
+  margin: 0;
+  padding: 0;
+}
+.website nav { margin-top: 0; }
+
+/* Equally weighted hero columns on desktop; let the existing mobile rules win. */
+@media (min-width: 801px) {
+  .website .hero { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+  .website .heroCopy {
+    padding-left: clamp(28px, 4.5vw, 80px);
+    padding-right: clamp(28px, 4.5vw, 80px);
+  }
+}
+
+/* v1.6.2 — CRM-backed contact form feedback. v1.6.1 full-width fixes are included above. */
+.website .contactForm .formSuccess {
+  border: 1px solid #a2d2b4;
+  border-radius: 6px;
+  padding: 12px 14px;
+  background: #e7f5eb;
+  color: #155b39;
+  font-size: 13px;
+  line-height: 1.5;
+}
+.website .contactForm .formError {
+  border: 1px solid #e7b8b6;
+  border-radius: 6px;
+  padding: 12px 14px;
+  background: #fff1f0;
+  color: #9d2727;
+  font-size: 13px;
+  line-height: 1.5;
+}
+.website .contactForm .honeypot {
+  position: absolute !important;
+  width: 1px !important;
+  height: 1px !important;
+  overflow: hidden !important;
+  clip-path: inset(100%) !important;
+  white-space: nowrap !important;
+}
+.website .contactForm button:disabled { cursor: not-allowed; opacity: .6; }

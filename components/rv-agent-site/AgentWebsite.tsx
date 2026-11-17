@@ -166,7 +166,7 @@ export function AgentWebsite({site, preview = false, page = 'home', basePath}: {
             {tel && <a className={styles.contactDetail} href={tel}><span>Call</span><strong>{phone}</strong></a>}
             {site.brokerage_name && <div className={styles.contactDetail}><span>Brokerage</span><strong>{site.brokerage_name}</strong></div>}
           </div>
-          <ContactForm email={email} />
+          <ContactForm siteSlug={site.slug} preview={preview} />
         </section>
       </>}
     </main>
