@@ -72,7 +72,7 @@ export default function OfficePayrollEFT({brokerageId,mode,accounts,payouts,agen
      onNavigate?.('EFT payments');
    }
  }
- function patchSalary(id:string,key:'bank'|'chequeNumber'|'destination'|'last4',value:string){setSalaryDraft(prev=>({...prev,[id]:{bank:'',chequeNumber:'',destination:'',last4:'',...prev[id],[key]:value}}))}
+ function patchSalary(id:string,key:'bank'|'chequeNumber'|'destination'|'last4',value:string){setSalaryDraft(prev=>({...prev,[id]:{...(prev[id] ?? {bank:'',chequeNumber:'',destination:'',last4:''}),[key]:value}}))}
 
  return <>
  {error&&<section className="panel"><p role="alert">{error}</p></section>}
