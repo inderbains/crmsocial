@@ -18,7 +18,9 @@ create table if not exists public.office_bank_statements (
 );
 create index if not exists office_bank_statements_account_period_idx on public.office_bank_statements(account_id,period_end desc);
 alter table public.office_bank_statements enable row level security;
+drop policy if exists office_statement_read on public.office_bank_statements;
 create policy office_statement_read on public.office_bank_statements for select to authenticated using (public.is_brokerage_admin(brokerage_id));
+drop policy if exists office_statement_insert on public.office_bank_statements;
 create policy office_statement_insert on public.office_bank_statements for insert to authenticated with check (
  public.is_brokerage_admin(brokerage_id) and uploaded_by=auth.uid() and
  exists(select 1 from public.office_bank_accounts a where a.id=account_id and a.brokerage_id=office_bank_statements.brokerage_id)
@@ -27,11 +29,13 @@ grant select,insert on public.office_bank_statements to authenticated;
 insert into storage.buckets(id,name,public,file_size_limit,allowed_mime_types)
 values ('office-bank-statements','office-bank-statements',false,12582912,array['application/pdf'])
 on conflict(id) do update set public=false,file_size_limit=12582912,allowed_mime_types=array['application/pdf'];
+drop policy if exists office_statement_pdf_select on storage.objects;
 create policy office_statement_pdf_select on storage.objects for select to authenticated using (
  bucket_id='office-bank-statements' and
  exists(select 1 from public.office_bank_accounts a where a.id::text=split_part(name,'/',2)
  and a.brokerage_id::text=split_part(name,'/',1) and public.is_brokerage_admin(a.brokerage_id))
 );
+drop policy if exists office_statement_pdf_insert on storage.objects;
 create policy office_statement_pdf_insert on storage.objects for insert to authenticated with check (
  bucket_id='office-bank-statements' and storage.extension(name)='pdf' and
  exists(select 1 from public.office_bank_accounts a where a.id::text=split_part(name,'/',2)

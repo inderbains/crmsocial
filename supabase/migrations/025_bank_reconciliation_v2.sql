@@ -21,6 +21,7 @@ create table if not exists public.office_reconciliation_reviews (
  unique(account_id,period_end)
 );
 alter table public.office_reconciliation_reviews enable row level security;
+drop policy if exists office_reconciliation_reviews_read on public.office_reconciliation_reviews;
 create policy office_reconciliation_reviews_read on public.office_reconciliation_reviews
  for select to authenticated using (public.is_brokerage_admin(brokerage_id));
 grant select on public.office_reconciliation_reviews to authenticated;
@@ -126,6 +127,7 @@ declare r public.office_reconciliation_reviews;a public.office_bank_accounts;t r
  values(r.brokerage_id,r.account_id,r.period_end,r.statement_balance,t.ledger_balance,t.trust_liability_total,auth.uid());
 end $$;
 
+drop trigger if exists office_reconciliation_review_audit on public.office_reconciliation_reviews;
 create trigger office_reconciliation_review_audit after insert or update on public.office_reconciliation_reviews
  for each row execute function public.audit_office_change();
 revoke all on function public.office_reconciliation_totals(uuid,date) from public,anon;
