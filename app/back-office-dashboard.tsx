@@ -93,7 +93,9 @@ export default function BackOfficeDashboard({brokerageName,deals,requirements,pa
       {name:'New agent setup',description:'Onboard agents, agreements and required documents.',icon:UserRoundPlus},
       {name:'Plans & monthly fees',description:'Commission splits, recurring fees and deductions.',icon:SlidersHorizontal},
       {name:'Cheque printing',description:'Print authorized cheques and access cheque registers.',icon:Printer},
-      {name:'Agent payments',description:'Authorize payouts and track payment status.',icon:WalletCards,badge:unpaid},
+      {name:'Agent payments',description:'Authorize payouts and choose cheque or EFT.',icon:WalletCards,badge:unpaid},
+      {name:'Payroll & salaries',description:'Create and approve staff pay runs, then choose cheque or EFT.',icon:UserRound},
+      {name:'EFT payments',description:'Track agent and salary EFTs and confirm bank settlement.',icon:CreditCard},
     ]},
     {heading:'Trust & Accounting',hint:'Track brokerage money, banking and financial controls.',modules:[
       {name:'Trust & bank',description:'Deposits, releases, accounts and ledger entries.',icon:Landmark,badge:pendingDeposits.length},
