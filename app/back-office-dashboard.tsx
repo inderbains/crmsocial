@@ -10,6 +10,7 @@ import {
 import type {LucideIcon} from 'lucide-react';
 import {brokerageDay} from '../lib/listing-status';
 import {transactionLabel} from '../lib/agent-reports';
+import {summarizeWorkflow} from '../lib/transaction-workflow.mjs';
 
 type Module = {name:string;description:string;icon:LucideIcon;badge?:number};
 type Group = {heading:string;hint:string;modules:Module[]};
@@ -26,6 +27,12 @@ type Props = {
   onNavigate:(view:string)=>void;
   onRefresh:()=>void;
   refreshing:boolean;
+  allocations:any[];
+  matches:any[];
+  closingDeliveries:any[];
+  statements:any[];
+  statementFeatureReady:boolean;
+  workflowEvents:any[];
 };
 const asDate=(s:string)=>new Date(`${s}T12:00:00Z`);
 const shortDate=(s:string)=>new Intl.DateTimeFormat('en-CA',{month:'short',day:'numeric',timeZone:'UTC'}).format(asDate(s));
@@ -33,8 +40,15 @@ const fullDate=(s:string)=>new Intl.DateTimeFormat('en-CA',{weekday:'long',month
 const dayPlus=(iso:string,n:number)=>{const d=asDate(iso);d.setUTCDate(d.getUTCDate()+n);return d.toISOString().slice(0,10)};
 const money=(n:number)=>new Intl.NumberFormat('en-CA',{style:'currency',currency:'CAD',maximumFractionDigits:0}).format(n);
 
-export default function BackOfficeDashboard({brokerageName,deals,requirements,payouts,bills,accounts,ledger,reconciliations,billingAlerts,onNavigate,onRefresh,refreshing}:Props){
+export default function BackOfficeDashboard({brokerageName,deals,requirements,payouts,bills,accounts,ledger,reconciliations,billingAlerts,onNavigate,onRefresh,refreshing,allocations,matches,closingDeliveries,statements,statementFeatureReady,workflowEvents}:Props){
   const today=brokerageDay();
+  const workflow=summarizeWorkflow(deals,{today,ledger,payouts,allocations,matches,accounts,deliveries:closingDeliveries,requirements});
+  const pendingWorkflow=workflow.filter(w=>w.percent<100&&w.status!=='Draft');
+  const previousBankMonth=new Date(today.slice(0,7)+'-01T12:00:00Z');previousBankMonth.setUTCDate(0);
+  const previousStatementPeriod=previousBankMonth.toISOString().slice(0,7);
+  const missingStatements=accounts.filter(a=>a.active!==false && !statements.some(s=>s.account_id===a.id && String(s.period_end).startsWith(previousStatementPeriod)));
+  const accountNotReconciled=accounts.filter(a=>a.active!==false && !reconciliations.some(rec=>rec.account_id===a.id && String(rec.period_end).startsWith(previousStatementPeriod)));
+
   const nextWeek=dayPlus(today,7);
   const nextFortnight=dayPlus(today,14);
   const recentSince=dayPlus(today,-6);
@@ -57,6 +71,7 @@ export default function BackOfficeDashboard({brokerageName,deals,requirements,pa
     return recorded + 0.01 < Number(d.deposit_amount);
   })());
   const reminders=[
+    {count:statementFeatureReady?missingStatements.length:0,label:'Monthly bank statements still missing',target:'Bank reconciliation',icon:Landmark},
     {count:pendingRecs.length,label:'Prior-month bank reconciliations pending',target:'Bank reconciliation',icon:Landmark},
     {count:pendingDeposits.length,label:'Deposits to verify against trust entries',target:'Trust & bank',icon:Landmark},
     {count:unverified,label:'Document requirements awaiting verification',target:'Review queue',icon:Files},
@@ -81,7 +96,7 @@ export default function BackOfficeDashboard({brokerageName,deals,requirements,pa
     ]},
     {heading:'Trust & Accounting',hint:'Track brokerage money, banking and financial controls.',modules:[
       {name:'Trust & bank',description:'Deposits, releases, accounts and ledger entries.',icon:Landmark,badge:pendingDeposits.length},
-      {name:'Bank reconciliation',description:'Manual entries, CSV imports, matching and approvals.',icon:Scale,badge:pendingRecs.length},
+      {name:'Bank reconciliation',description:'Monthly PDF/CSV statements, manual lines, trust checks and broker approval.',icon:Scale,badge:pendingRecs.length},
       {name:'Reports',description:'Production, commissions and brokerage financial reports.',icon:ChartNoAxesCombined},
       {name:'Audit & controls',description:'Audit history, exceptions and accounting safeguards.',icon:ShieldCheck,badge:billingAlerts.length},
     ]},
@@ -113,6 +128,21 @@ export default function BackOfficeDashboard({brokerageName,deals,requirements,pa
       </div>
     </section>
 
+    <section className="bo-detail" aria-label="Transaction workflow tracker" style={{marginBottom:20}}>
+      <div className="bo-detail-head"><div><p className="bo-kicker">CONNECTED MODULES · LIVE STATUS</p><h2>Automatic transaction workflow</h2><p style={{marginTop:6,fontSize:13,color:'var(--muted, #65756e)'}}>The next work queue updates as the agent, broker and accounting team complete their required actions. Routing does not send money or legal emails.</p></div><span className="bo-count">{pendingWorkflow.length} active files</span></div>
+      {pendingWorkflow.length ? <div className="bo-list">{pendingWorkflow.slice(0,8).map(w=><div className="bo-list-row bo-static-row" key={w.dealId} style={{display:'grid',gridTemplateColumns:'minmax(0,1fr) auto',gap:12,alignItems:'center'}}>
+        <div style={{minWidth:0}}><strong style={{fontSize:14}}>{w.address || `Transaction ${w.transactionNumber||''}`}</strong><small style={{display:'block',marginTop:4}}>#{transactionLabel(w.transactionNumber)} · {w.stage} · Assigned: {w.owner}</small><div style={{height:5,background:'#e1eae3',borderRadius:9,marginTop:9,overflow:'hidden'}}><div style={{height:'100%',width:`${w.percent}%`,background:'#17643f',borderRadius:9}}/></div><small style={{display:'block',marginTop:5}}>{w.nextAction}</small>{w.blockers.length>0&&<small style={{display:'block',color:'#a23b27',marginTop:3}}>{w.blockers.join('; ')}</small>}</div>
+        <button type="button" className="bo-cta" onClick={()=>onNavigate(w.nextModule)} aria-label={`Open ${w.nextModule} for ${w.address}`} style={{whiteSpace:'nowrap'}}>Open {w.nextModule} <ArrowRight size={15}/></button>
+      </div>)}</div>:<div className="bo-empty"><CircleCheck size={20}/> No files are awaiting the next workflow action.</div>}
+      <p className="bo-footnote">Clicking opens the responsible module; select the transaction there. Financial and broker approvals still require authorized users.</p>
+      {workflowEvents.length>0&&<details style={{marginTop:12}}><summary style={{cursor:'pointer',fontSize:13}}>Recent workflow activity ({workflowEvents.length})</summary><div className="bo-list">{workflowEvents.slice(0,8).map(e=><div className="bo-list-row bo-static-row" key={e.id}><span className="bo-list-text"><b>{e.event_type.replaceAll('_',' ')}</b><small>{e.old_value?'From '+e.old_value+' → ':''}{e.new_value}</small></span><small>{new Date(e.occurred_at).toLocaleString('en-CA')}</small></div>)}</div></details>}
+
+    </section>
+    <section className="bo-detail" style={{marginBottom:20}} aria-label="Monthly statement checklist">
+      <div className="bo-detail-head"><div><p className="bo-kicker">MONTH-END ACCOUNTING</p><h2>Monthly bank statement checklist</h2></div><button type="button" className="bo-text-action" onClick={()=>onNavigate('Bank reconciliation')}>Open reconciliation <ArrowRight size={15}/></button></div>
+      {statementFeatureReady?<p className="bo-footnote">{previousStatementPeriod}: {missingStatements.length} account(s) awaiting statements · {accountNotReconciled.length} account(s) not yet approved. Evidence must be reviewed before approval.</p>:<p className="bo-footnote">PDF statement checklist is not activated. Run Supabase migrations 027 and 028 before using this feature.</p>}
+      <div className="bo-list">{statementFeatureReady&&accounts.filter(a=>a.active!==false).map(a=>{const st=statements.some(s=>s.account_id===a.id&&String(s.period_end).startsWith(previousStatementPeriod));const approved=reconciliations.some(rec=>rec.account_id===a.id&&String(rec.period_end).startsWith(previousStatementPeriod));return <button type="button" className="bo-list-row" key={a.id} onClick={()=>onNavigate('Bank reconciliation')}><Landmark size={17}/><span className="bo-list-text">{a.name} <small>{a.kind} · {previousStatementPeriod}</small></span><b>{approved?'Approved & locked':st?'Reconciliation pending':'Awaiting statement'}</b><ArrowRight size={15}/></button>})}</div>
+    </section>
     <div className="bo-activity-grid">
       <section className="bo-detail" id="bo-attention"><div className="bo-detail-head"><div><p className="bo-kicker">PRIORITIES</p><h2>Needs your attention</h2></div><span className="bo-count">{reminderCount} items</span></div>
         {reminders.length ? <div className="bo-list">{reminders.slice(0,5).map(r=><button key={r.label} type="button" className="bo-list-row" onClick={()=>onNavigate(r.target)}><span className="bo-list-icon"><r.icon size={17}/></span><span className="bo-list-text">{r.label}</span><b>{r.count}</b><ArrowRight size={15}/></button>)}</div> : <div className="bo-empty"><CircleCheck size={20}/> No outstanding action reminders found in the loaded records.</div>}

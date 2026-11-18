@@ -2,8 +2,11 @@
 import {useEffect,useState,type FormEvent} from 'react';
 import {getSupabase} from '../lib/supabase';
 import {cad,cents} from '../lib/agent-reports';
+import {parseBankStatement} from '../lib/bank-statement-parser.mjs';
 
 type Row=Record<string,any>;
+type PDFLine={source_index:number;date:string;description:string;amount:number;reference:string;include:boolean};
+type PDFPreview={rows:PDFLine[];uncertain:string[];opening:number|null;closing:number|null;file:File|null;hash:string;id?:string};
 type Props={account:Row;bankRows:Row[];ledgerRows:Row[];matches:Row[];reviews:Row[];reconciliations:Row[];period:string;setPeriod:(s:string)=>void;statementBalance:number;setStatementBalance:(n:number)=>void;busy:boolean;reload:()=>Promise<void>;notify:(s:string)=>void;importCSV:(file:File|undefined)=>Promise<void>};
 const amount=(n:number)=>cad(cents(n));
 export default function OfficeBankReconciliation({account,bankRows,ledgerRows,matches,reviews,reconciliations,period,setPeriod,statementBalance,setStatementBalance,busy,reload,notify,importCSV}:Props){
@@ -14,6 +17,12 @@ export default function OfficeBankReconciliation({account,bankRows,ledgerRows,ma
  const [totals,setTotals]=useState<Row|null>(null);
  const [error,setError]=useState('');
  const [working,setWorking]=useState(false);
+ const [statements,setStatements]=useState<Row[]>([]);
+ const [pdfPreview,setPdfPreview]=useState<PDFPreview|null>(null);
+ const [pdfConfirmed,setPdfConfirmed]=useState(false);
+ const [pdfReviewNotes,setPdfReviewNotes]=useState('');
+ const [statementBusy,setStatementBusy]=useState(false);
+ const [statementMessage,setStatementMessage]=useState('');
  const [reviewRows,setReviewRows]=useState<Row[]>(reviews);
  const matchedBank=new Set(matches.map(m=>m.bank_line_id));
  const matchedLedger=new Set(matches.map(m=>m.ledger_id));
@@ -23,6 +32,51 @@ export default function OfficeBankReconciliation({account,bankRows,ledgerRows,ma
  const history=reconciliations.filter(r=>r.account_id===account.id).sort((a,b)=>b.period_end.localeCompare(a.period_end));
  const adjusted=statementBalance+(Number(totals?.deposits_in_transit)||0)-(Number(totals?.outstanding_cheques)||0);
  const difference=adjusted-(Number(totals?.ledger_balance)||0);
+ async function loadStatements(){const r=await db.from('office_bank_statements').select('*').eq('account_id',account.id).order('period_end',{ascending:false});if(r.error)throw r.error;setStatements(r.data||[])}
+ useEffect(()=>{void loadStatements().catch(e=>setStatementMessage((e as Error).message))},[account.id]);
+ async function extractPDF(file:File|undefined){if(!file)return;setStatementMessage('');setPdfPreview(null);setPdfConfirmed(false);setPdfReviewNotes('');if(file.size>12*1024*1024){setStatementMessage('Maximum PDF size is 12 MB');return;}setStatementBusy(true);try{
+  const pdfjs=await import('pdfjs-dist');pdfjs.GlobalWorkerOptions.workerSrc=new URL('pdfjs-dist/build/pdf.worker.min.mjs',import.meta.url).toString();
+  const pdf=await pdfjs.getDocument({data:new Uint8Array(await file.arrayBuffer()),cMapUrl:(process.env.NEXT_PUBLIC_BASE_PATH||'')+'/vendor/pdfjs/cmaps/',cMapPacked:true,standardFontDataUrl:(process.env.NEXT_PUBLIC_BASE_PATH||'')+'/vendor/pdfjs/standard_fonts/',wasmUrl:(process.env.NEXT_PUBLIC_BASE_PATH||'')+'/vendor/pdfjs/wasm/'}).promise;
+  const pages:string[]=[];for(let i=1;i<=pdf.numPages;i++){const page=await pdf.getPage(i);const content=await page.getTextContent();let line='';let previousY:number|null=null;const out:string[]=[];for(const item of content.items){if(!('str' in item))continue;const y=(item as any).transform?.[5]??null;if(previousY!==null&&y!==null&&Math.abs(y-previousY)>2){out.push(line);line=''}line+=(line?' ':'')+item.str;if((item as any).hasEOL){out.push(line);line=''}previousY=y}if(line)out.push(line);pages.push(out.join('\n'))}await pdf.destroy();
+  const parsed=parseBankStatement(pages.join('\n'),period);
+  const digest=await crypto.subtle.digest('SHA-256',await file.arrayBuffer());
+  const hash=Array.from(new Uint8Array(digest)).map(b=>b.toString(16).padStart(2,'0')).join('');
+  setPdfPreview({rows:parsed.transactions.map((r:any,i:number)=>({source_index:i,date:r.date,description:r.description,amount:r.amount,reference:r.reference||'',include:true})),uncertain:parsed.uncertain,opening:Number.isFinite(parsed.opening)?parsed.opening:null,closing:Number.isFinite(parsed.closing)?parsed.closing:null,file,hash});
+  if(parsed.closing!==null&&Number.isFinite(parsed.closing))setStatementBalance(parsed.closing);
+  if(!parsed.transactions.length)setStatementMessage('No reliable transaction rows detected. Keep the PDF as evidence and enter transactions manually or upload the bank CSV. Scanned/image PDFs are not supported automatically.');
+ }catch(e){setStatementMessage('PDF extraction failed: '+(e as Error).message)}finally{setStatementBusy(false)}}
+ async function savePDF(){if(!pdfPreview)return;setStatementBusy(true);setStatementMessage('');try{
+  if(!pdfConfirmed)throw new Error('Confirm that you compared the extracted rows against the original bank statement.');
+  const {file,rows,uncertain,opening,hash}=pdfPreview;
+  const chosen=rows.filter(r=>r.include);
+  if(chosen.length>2000)throw new Error('Maximum 2,000 lines per import');
+  for(const row of chosen){if(!/^\d{4}-\d{2}-\d{2}$/.test(row.date)||!row.description.trim()||!Number.isFinite(Number(row.amount))||Number(row.amount)===0||row.date>period)throw new Error(`Check date, description and signed amount for PDF row ${row.source_index+1}`)}
+  const delta=opening!==null&&pdfPreview.closing!==null?Math.round((pdfPreview.closing-opening)*100)/100:null;
+  const parsedTotal=Math.round(chosen.reduce((sum,r)=>sum+Number(r.amount),0)*100)/100;
+  if(delta!==null&&Math.abs(delta-parsedTotal)>0.01&&!pdfReviewNotes.trim())throw new Error('Extracted bank movements do not equal closing minus opening balance. Enter an explanation or correct the rows.');
+  let id=pdfPreview.id;
+  if(!id){
+   if(!file)throw new Error('Select PDF again to save evidence.');
+   const duplicate=statements.find(s=>s.source_sha256===hash&&s.account_id===account.id);
+   if(duplicate)throw new Error('This PDF is already saved for this bank account. Use Resume import instead of uploading it twice.');
+   id=crypto.randomUUID();const path=`${account.brokerage_id}/${account.id}/${id}.pdf`;
+   const up=await db.storage.from('office-bank-statements').upload(path,file,{contentType:'application/pdf',upsert:false});if(up.error)throw up.error;
+   const record=await db.from('office_bank_statements').insert({id,brokerage_id:account.brokerage_id,account_id:account.id,period_end:period,storage_path:path,filename:file.name,statement_balance:statementBalance,opening_balance:opening,source_sha256:hash,status:'Needs review',extracted_count:chosen.length,uncertain_count:uncertain.length,extracted_preview:chosen.map(r=>({source_index:r.source_index,date:r.date,description:r.description.trim(),amount:Number(r.amount),reference:r.reference.trim()}))});
+   if(record.error){throw new Error('PDF uploaded but statement record could not be saved: '+record.error.message)}
+   setPdfPreview(v=>v?{...v,id}:v);await loadStatements();
+  }
+  const result=await db.rpc('import_office_statement_rows',{p_statement:id,p_rows:chosen.map(r=>({source_index:r.source_index,date:r.date,description:r.description.trim(),amount:Number(r.amount),reference:r.reference.trim()}))});
+  if(result.error)throw result.error;
+  const imported=Number(result.data)||0;
+  setPdfPreview(null);setPdfConfirmed(false);setPdfReviewNotes('');
+  setStatementMessage(`Statement saved privately; ${imported} new bank lines imported (${chosen.length-imported} already imported). ${uncertain.length} unparsed lines still require checking. Match entries to the ledger before reconciliation.`);
+  await reload();await loadStatements();
+ }catch(e){setStatementMessage('Import not completed: '+(e as Error).message+'. Saved PDFs can be resumed below.')}finally{setStatementBusy(false)}}
+ function resumeStatement(statement:Row){const rows=Array.isArray(statement.extracted_preview)?statement.extracted_preview:[];
+  setPdfPreview({id:statement.id,rows:rows.map((r:PDFLine)=>({...r,include:true})),uncertain:[],opening:statement.opening_balance==null?null:Number(statement.opening_balance),closing:statement.statement_balance==null?null:Number(statement.statement_balance),hash:statement.source_sha256||'',file:null});
+  setPeriod(statement.period_end);setStatementBalance(Number(statement.statement_balance||0));setPdfConfirmed(false);setPdfReviewNotes('');setStatementMessage('Resumed saved PDF import: review the rows and confirm before importing.');
+ }
+ async function openStatement(path:string){const r=await db.storage.from('office-bank-statements').createSignedUrl(path,60);if(r.error)throw r.error;window.open(r.data.signedUrl,'_blank','noopener,noreferrer')}
  async function refresh(){
   const [result,revs]=await Promise.all([db.rpc('office_reconciliation_totals',{p_account:account.id,p_period:period}),db.from('office_reconciliation_reviews').select('*').eq('account_id',account.id)]);
   if(result.error)throw result.error;if(revs.error)throw revs.error;
@@ -44,6 +98,20 @@ export default function OfficeBankReconciliation({account,bankRows,ledgerRows,ma
    <div className="crm-stats" style={{marginTop:16}}>{[[amount(statementBalance),'Bank statement'],[amount(Number(totals?.deposits_in_transit||0)),'Deposits in transit'],[amount(Number(totals?.outstanding_cheques||0)),'Uncleared cheques'],[amount(adjusted),'Adjusted bank'],[amount(Number(totals?.ledger_balance||0)),'Book ledger'],[amount(difference),'Difference']].map(([n,l])=><div key={l} className="stat"><div><strong>{n}</strong><p>{l}</p></div></div>)}</div>
    {account.kind==='Trust'&&<div className="notice">Trust liabilities by transaction: <b>{amount(Number(totals?.trust_liability_total||0))}</b> · Negative file ledgers: <b>{totals?.negative_file_count??'—'}</b>. Approval requires the bank, trust control ledger and individual file liabilities to agree.</div>}
    <p className="hint">Unmatched ledger deposits and cheques remain in transit until they appear on the bank statement. Imported bank lines without a ledger match must be resolved. Do not enter the same transaction twice.</p>
+  </section>
+  <section className="panel"><h2>Monthly statement checklist & PDF upload</h2><p>Upload each account’s original PDF every month. Extracted lines are editable and must be confirmed; text-only PDFs are supported (scanned PDFs require CSV or manual entry). Bank statement imports never create ledger receipts or authorize transfers.</p>
+   <div className="crm-form-grid"><div className="field"><label>Statement PDF (max 12 MB, selectable text)</label><input type="file" accept="application/pdf,.pdf" disabled={statementBusy||disabled} onChange={e=>{void extractPDF(e.target.files?.[0]);e.target.value=''}}/></div></div>
+   {statementMessage&&<p role="status" className="notice">{statementMessage}</p>}
+   {pdfPreview&&<div style={{display:'grid',gap:12}}><h3>Review extracted lines — {pdfPreview.rows.length} candidates</h3><p className="hint">Check the original PDF for omitted lines, dates, deposits and withdrawals. Correct the preview before importing. Positive amount = deposit, negative amount = withdrawal. No transaction is entered until you confirm.</p>
+    {pdfPreview.uncertain.length>0&&<div className="notice" role="alert">{pdfPreview.uncertain.length} ambiguous dated lines need manual attention. The PDF may need CSV or manual entry.<details><summary>View unreadable rows</summary>{pdfPreview.uncertain.slice(0,100).map((line,i)=><p key={i}>{line}</p>)}</details></div>}
+    <div className="crm-stats"><div className="stat"><div><strong>{pdfPreview.opening==null?'Not detected':amount(pdfPreview.opening)}</strong><p>Opening balance</p></div></div><div className="stat"><div><strong>{pdfPreview.closing==null?'Not detected':amount(pdfPreview.closing)}</strong><p>Closing balance</p></div></div><div className="stat"><div><strong>{amount(pdfPreview.rows.filter(r=>r.include).reduce((t,r)=>t+Number(r.amount||0),0))}</strong><p>Selected transaction net</p></div></div></div>
+    {pdfPreview.opening!==null&&pdfPreview.closing!==null&&Math.abs((pdfPreview.closing-pdfPreview.opening)-pdfPreview.rows.filter(r=>r.include).reduce((t,r)=>t+Number(r.amount||0),0))>0.01&&<div className="notice" role="alert">The extracted rows do not add up to the statement balance movement. Correct or manually enter missing lines. This PDF cannot prove the statement is complete on its own.</div>}
+    <div style={{maxHeight:400,overflow:'auto',display:'grid',gap:7}}>{pdfPreview.rows.map((r,i)=><div className="panel" key={r.source_index} style={{padding:10}}><label style={{display:'flex',alignItems:'center',gap:7}}><input type="checkbox" checked={r.include} onChange={e=>setPdfPreview(v=>v?{...v,rows:v.rows.map((x,j)=>i===j?{...x,include:e.target.checked}:x)}:v)}/> Include statement line #{r.source_index+1}</label><div className="crm-form-grid"><label className="field">Date<input type="date" value={r.date} onChange={e=>setPdfPreview(v=>v?{...v,rows:v.rows.map((x,j)=>i===j?{...x,date:e.target.value}:x)}:v)}/></label><label className="field">Amount (+deposit / -withdrawal)<input type="number" step="0.01" value={r.amount} onChange={e=>setPdfPreview(v=>v?{...v,rows:v.rows.map((x,j)=>i===j?{...x,amount:Number(e.target.value)}:x)}:v)}/></label><label className="field">Description<input value={r.description} onChange={e=>setPdfPreview(v=>v?{...v,rows:v.rows.map((x,j)=>i===j?{...x,description:e.target.value}:x)}:v)}/></label><label className="field">Reference / cheque #<input value={r.reference} onChange={e=>setPdfPreview(v=>v?{...v,rows:v.rows.map((x,j)=>i===j?{...x,reference:e.target.value}:x)}:v)}/></label></div></div>)}</div>
+    <div className="field"><label>Explanation if the transaction net differs from the statement balance movement</label><textarea value={pdfReviewNotes} maxLength={1000} onChange={e=>setPdfReviewNotes(e.target.value)} placeholder="Missing lines will be entered manually, debit/credit column unclear, bank CSV used for the remaining rows…"/></div>
+    <label style={{display:'flex',gap:8,alignItems:'start'}}><input type="checkbox" checked={pdfConfirmed} onChange={e=>setPdfConfirmed(e.target.checked)}/> I reviewed this extraction against the original PDF and will resolve any missing or uncertain lines before reconciliation approval.</label>
+    <button type="button" className="btn primary" disabled={statementBusy||disabled||!pdfConfirmed} onClick={()=>void savePDF()}>{pdfPreview.id?'Resume selected line import':'Save PDF & import reviewed lines'}</button></div>}
+   <h3>Monthly statements for this account</h3>
+   {Array.from({length:6},(_,i)=>{const d=new Date(period+'T12:00:00');d.setUTCMonth(d.getUTCMonth()-i);const month=d.toISOString().slice(0,7);const statement=statements.find(s=>s.period_end.startsWith(month));const approved=history.find(r=>r.period_end.startsWith(month));const prepared=pending.find(r=>r.period_end.startsWith(month));return <div className="draftrow" key={month}><div><b>{month}</b><p>{approved?'Approved & locked':prepared?'Pending broker approval':statement?'Statement uploaded — reconciliation pending':'Awaiting statement'}</p></div>{statement&&<div className="actions"><button type="button" className="btn smallbtn" onClick={()=>void openStatement(statement.storage_path).catch(e=>setStatementMessage((e as Error).message))}>View PDF</button><button type="button" className="btn smallbtn" onClick={()=>resumeStatement(statement)}>Resume import</button></div>}</div>})}
   </section>
   <section className="panel"><h2>Add bank statement transaction manually</h2><p>Use for a line shown on the bank statement. For missing bookkeeping entries, first use Trust & bank to post the corresponding ledger entry.</p>
    <form onSubmit={postManual}><div className="crm-form-grid"><div className="field"><label>Bank posting date</label><input required type="date" value={entry.day} onChange={e=>setEntry({...entry,day:e.target.value})}/></div><div className="field"><label>Amount (deposit + / withdrawal −)</label><input required type="number" step=".01" value={entry.amount} onChange={e=>setEntry({...entry,amount:e.target.value})}/></div><div className="field"><label>Description</label><input required value={entry.description} onChange={e=>setEntry({...entry,description:e.target.value})}/></div><div className="field"><label>Bank reference / cheque number</label><input value={entry.reference} onChange={e=>setEntry({...entry,reference:e.target.value})}/></div></div><button className="btn primary" disabled={disabled}>Record statement line</button></form>
