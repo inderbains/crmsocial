@@ -151,6 +151,7 @@ export default function RealEstateCRM({userId}:{userId:string}){
         const Icon=[House,Users,Building2,ClipboardList][i];
         return <button key={x} className={tab===x?styles.activeNav:styles.navItem} onClick={()=>{setTab(x);setSelected(null)}}><Icon size={17}/>{x}{x==='Follow-ups'&&dueTasks.length>0&&<span className={styles.navCount}>{dueTasks.length}</span>}</button>
       })}
+      <a className={styles.navItem} href="/crm-automations" style={{textDecoration:'none'}}>⚡ Automation Studio</a>
     </nav>
     <div className={styles.sideBottom}><a href="/"><ArrowLeft size={15}/> Back to RealVolt workspace</a><small>Existing CRM records • Owner-private</small></div>
   </aside>
