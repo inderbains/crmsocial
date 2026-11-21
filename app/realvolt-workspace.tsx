@@ -24,6 +24,7 @@ import MetaAds from './meta-ads';
 import MetaConnections from './meta-connections';
 import MetaLeadImport from './meta-lead-import';
 import EmailCenter from './email-center';
+import MarketingAutomation from './marketing-automation';
 import CRMAutomationEngine from './crm-automation-engine';
 import ContentCalendar from './content-calendar';
 import OfficeLeadRules from './office-lead-rules';
@@ -168,7 +169,7 @@ export default function Workspace(){
  {page==='CRM'&&sectionView==='Buyer Matching'&&<BuyerMatching userId={user.id} notify={notify}/>}
  {page==='CRM'&&sectionView==='Lead Funnel'&&<LeadFunnel userId={user.id}/>}
  {page==='CRM'&&sectionView==='Post-Sale Follow-Ups'&&<PostSaleFollowups userId={user.id} notify={notify}/>}
- {page==='CRM'&&sectionView==='Automations'&&<CRMAutomationEngine userId={user.id} notify={notify}/>} 
+ {page==='CRM'&&sectionView==='Automations'&&<CRMAutomationEngine userId={user.id} notify={notify}/>}
  {page==='CRM'&&!['Meta Leads','Showing requests','Buyer Matching','Lead Funnel','Post-Sale Follow-Ups','Automations'].includes(sectionView)&&<CRM userId={user.id} notify={notify} view={sectionView}/>}
  {(page==='Transactions'||page==='Back Office'&&isBrokerageAdmin&&['Review queue','Changes requested','Approved'].includes(sectionView))&&<Transactions key={page} userId={user.id} backOffice={page==='Back Office'} view={sectionView} notify={notify}/>}
  {page==='Back Office'&&isBrokerageAdmin&&!['Review queue','Changes requested','Approved','Office DDF & Listings','Office Meta Accounts','Office Lead Routing','Office Marketing Dashboard','Brokerage Control'].includes(sectionView)&&<BackOffice initialAgentUserId={profileAgent} userId={user.id} view={sectionView} notify={notify} onNavigate={navigateSection}/>}
@@ -178,7 +179,7 @@ export default function Workspace(){
  {page==='Back Office'&&isBrokerageAdmin&&sectionView==='Office Marketing Dashboard'&&<OfficeMarketingDashboard userId={user.id}/>}
  {page==='Back Office'&&isBrokerageAdmin&&sectionView==='Office DDF & Listings'&&<DdfHub surface="office" userId={user.id} brand={brand} notify={notify} onPropertyPages={()=>navigate('Property Pages')}/>}
  {page==='My profile & billing'&&<AgentAccount userId={user.id} notify={notify}/>}
- {page==='Automations'&&<CRMAutomationEngine userId={user.id} notify={notify}/>}
+ {page==='Automations'&&<MarketingAutomation userId={user.id} notify={notify}/>}
  {page==='Email & Alerts'&&<EmailCenter userId={user.id} notify={notify}/>}
  {page==='Meta Ads'&&<MetaAds userId={user.id} notify={notify} onDesign={designAd}/>}
  {page==='Property Pages'&&<PropertyPages userId={user.id} brand={brand} notify={notify}/>}

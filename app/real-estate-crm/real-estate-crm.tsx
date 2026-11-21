@@ -43,7 +43,7 @@ export default function RealEstateCRM({userId}:{userId:string}){
  const [addContact,setAddContact]=useState(false),[contactSaving,setContactSaving]=useState(false);
  const [contactInput,setContactInput]=useState({full_name:'',email:'',phone:'',contact_type:'Buyer',source:'',preferred_area:'',budget:''});
  const [profileEdit,setProfileEdit]=useState<Profile|null>(null);
- const [noteInput,setNoteInput]=useState(''),[taskInput,setTaskInput]=useState(''),[due,setDue]=useState(today());
+ const [noteInput,setNoteInput]=useState(''),[noteType,setNoteType]=useState<'Note'|'Call'|'Email'|'Meeting'>('Note'),[taskInput,setTaskInput]=useState(''),[due,setDue]=useState(today());
  const [dealAddress,setDealAddress]=useState(''),[createDeal,setCreateDeal]=useState(false),[linkDeal,setLinkDeal]=useState('');
  const [purpose,setPurpose]=useState('Follow up with this client'),[channel,setChannel]=useState<'Email'|'SMS'>('Email'),[draft,setDraft]=useState('');
  const [draftBusy,setDraftBusy]=useState(false);
@@ -66,7 +66,7 @@ export default function RealEstateCRM({userId}:{userId:string}){
    }catch(e){setError((e as Error).message)}finally{setLoading(false)}
  },[userId]);
  useEffect(()=>{void load()},[load]);
- useEffect(()=>{setDraft('');setNoteInput('');setTaskInput('');setProfileEdit(null);setCreateDeal(false);setDealAddress('');setLinkDeal('')},[selected]);
+ useEffect(()=>{setDraft('');setNoteInput('');setNoteType('Note');setTaskInput('');setProfileEdit(null);setCreateDeal(false);setDealAddress('');setLinkDeal('')},[selected]);
  async function run(task:()=>Promise<void>){setBusy(true);try{await task()}catch(e){notify((e as Error).message)}finally{setBusy(false)}}
  async function newContact(e:FormEvent){
    e.preventDefault();setContactSaving(true);
@@ -96,8 +96,8 @@ export default function RealEstateCRM({userId}:{userId:string}){
  }
  async function addNote(e:FormEvent){e.preventDefault();if(!active||!noteInput.trim())return;
    await run(async()=>{
-     const {data,error}=await getSupabase()!.from('crm_notes').insert({user_id:userId,contact_id:active.id,body:noteInput.trim(),activity_type:'Note'}).select().single();
-     if(error)throw error;setNotes(xs=>[data as Note,...xs]);setNoteInput('');notify('Note saved to CRM.');
+     const {data,error}=await getSupabase()!.from('crm_notes').insert({user_id:userId,contact_id:active.id,body:noteInput.trim(),activity_type:noteType}).select().single();
+     if(error)throw error;setNotes(xs=>[data as Note,...xs]);setNoteInput('');if(noteType!=='Note'){const updated=await getSupabase()!.from('crm_contacts').select('id,stage').eq('id',active.id).eq('user_id',userId).single();if(!updated.error&&updated.data)setContacts(xs=>xs.map(x=>x.id===active.id?{...x,stage:updated.data.stage as Stage}:x))}notify(noteType==='Note'?'Note saved to CRM.':'Activity logged; pipeline updated when eligible.');
    });
  }
  async function addTask(e:FormEvent){e.preventDefault();if(!active||!taskInput.trim())return;
@@ -205,7 +205,7 @@ export default function RealEstateCRM({userId}:{userId:string}){
             <div className={styles.itemList}>{tasks.filter(t=>t.contact_id===active.id).map(t=><div className={styles.listItem} key={t.id}><button className={styles.taskCheck} onClick={()=>void completeTask(t)} aria-label={t.completed?'Reopen task':'Complete task'}>{t.completed?<Check size={15}/>:null}</button><div><b className={t.completed?styles.done:''}>{t.title}</b><p>{t.due_date||'No due date'} · {t.completed?'Complete':'Pending'}</p></div></div>)}{tasks.every(t=>t.contact_id!==active.id)&&<p className={styles.subtle}>No tasks for this contact.</p>}</div>
           </article>
           <article className={styles.panel}><div className={styles.panelHeader}><h3>Activity & notes</h3><span className={styles.subtle}>{notes.filter(n=>n.contact_id===active.id).length} entries</span></div>
-            <form onSubmit={addNote}><textarea className={styles.fullWidth} rows={3} required maxLength={10000} placeholder="Add a call summary, showing feedback or note…" value={noteInput} onChange={e=>setNoteInput(e.target.value)}/><button className={styles.secondaryButton} disabled={busy}>Save note</button></form>
+            <form onSubmit={addNote}><label>Activity type <select aria-label="Activity type" value={noteType} onChange={e=>setNoteType(e.target.value as typeof noteType)}><option>Note</option><option>Call</option><option>Email</option><option>Meeting</option></select></label><textarea className={styles.fullWidth} rows={3} required maxLength={10000} placeholder="Describe the activity or add a private note…" value={noteInput} onChange={e=>setNoteInput(e.target.value)}/><button className={styles.secondaryButton} disabled={busy}>Save note</button></form>
             <div className={styles.itemList}>{notes.filter(n=>n.contact_id===active.id).slice(0,20).map(n=><div className={styles.noteItem} key={n.id}><span>{new Date(n.created_at).toLocaleDateString('en-CA')} · {n.activity_type}</span><p>{n.body}</p></div>)}</div>
           </article>
         </div>

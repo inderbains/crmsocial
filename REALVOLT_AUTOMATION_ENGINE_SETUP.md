@@ -25,8 +25,8 @@ curl --fail --silent --show-error --max-time 30 \
 ## Where to open
 
 - RealVolt workspace → **CRM → Automations**
-- Social Studio → **Automations → Workflows**
-- The new Real Estate CRM dashboard → **Automation Studio**, or direct route `/crm-automations`
+- The global Social Studio **Automations** page keeps its EXISTING listing rules; for CRM workflows use CRM → **Automations** or `/crm-automations`
+- The standalone Real Estate CRM sidebar → **Automation Studio**, or direct route `/crm-automations`
 - Existing **Listing rules** remain available as a tab in Automations.
 
 ## How to test the complete workflow
