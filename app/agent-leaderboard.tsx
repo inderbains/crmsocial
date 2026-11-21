@@ -21,14 +21,13 @@ const money = new Intl.NumberFormat('en-CA', {
 function initials(value:string){return value.trim().split(/\s+/).slice(0,2).map(x=>x[0]||'').join('').toUpperCase();}
 
 /** Only brokerage-aggregate sales data is returned. Never loads commissions or client records. */
-export default function AgentLeaderboard({userId}:{userId:string}){
+export default function AgentLeaderboard({userId,onBack}:{userId:string;onBack:()=>void}){
   const [period,setPeriod] = useState<Period>('month');
   const [ranking,setRanking] = useState<Ranking>('volume');
   const [refreshCount,setRefreshCount] = useState(0);
   const [rows,setRows] = useState<LeaderboardRow[]>([]);
   const [loading,setLoading] = useState(true);
   const [error,setError] = useState('');
-  const [showAll,setShowAll] = useState(false);
   const [independent,setIndependent] = useState(false);
 
   const reload = useCallback(()=>setRefreshCount(v=>v+1),[]);
@@ -64,16 +63,15 @@ export default function AgentLeaderboard({userId}:{userId:string}){
   },[userId,period,ranking,refreshCount]);
 
   const qualifiedRows=useMemo(()=>rows.filter(r=>r.sales_count>0),[rows]);
-  const visible=showAll?qualifiedRows:qualifiedRows.slice(0,5);
+  const visible=qualifiedRows; // A standalone module shows the complete ranking.
   const own=qualifiedRows.find(r=>r.agent_id===userId);
   const monthLabel=new Intl.DateTimeFormat('en-CA',{
     month: period==='month'?'long':undefined,
     year:'numeric',timeZone:'America/Vancouver',
   }).format(new Date());
   const hasRanking=qualifiedRows.length>0;
-  if(independent)return null;
-
-  return <section className={styles.shell} aria-label="Brokerage agent sales leaderboard">
+  return <><div className="headrow"><div><p className="eyebrow">BROKERAGE PERFORMANCE</p><h1 style={{marginTop:9}}>Agent Leaderboard</h1><p>Monthly and yearly rankings by completed sales and total sales volume. No commissions.</p></div><button type="button" className="btn" onClick={onBack}>← My workspace</button></div>
+  {independent?<section className={styles.shell}><div className={styles.empty}><UsersRound size={24} style={{marginBottom:10}}/><div>This leaderboard is available to members of a brokerage. An independent account has no office rankings.</div></div></section>:<section className={styles.shell} aria-label="Brokerage agent sales leaderboard">
     <div className={styles.header}>
       <div>
         <div className={styles.eyebrow}>BROKERAGE PERFORMANCE</div>
@@ -82,8 +80,8 @@ export default function AgentLeaderboard({userId}:{userId:string}){
       </div>
       <div className={styles.tools}>
         <div className={styles.segment} role="group" aria-label="Leaderboard period">
-          <button type="button" aria-pressed={period==='month'} onClick={()=>{setPeriod('month');setShowAll(false);}}>Monthly</button>
-          <button type="button" aria-pressed={period==='year'} onClick={()=>{setPeriod('year');setShowAll(false);}}>Yearly</button>
+          <button type="button" aria-pressed={period==='month'} onClick={()=>setPeriod('month')}>Monthly</button>
+          <button type="button" aria-pressed={period==='year'} onClick={()=>setPeriod('year')}>Yearly</button>
         </div>
         <div className={styles.segment} role="group" aria-label="Rank agents by">
           <button type="button" aria-pressed={ranking==='volume'} onClick={()=>setRanking('volume')}>Volume</button>
@@ -109,9 +107,9 @@ export default function AgentLeaderboard({userId}:{userId:string}){
         </table>
         <div className={styles.footer}>
           <span className={styles.note}>{own?`Your rank: #${own.rank} · ${own.sales_count} sale${own.sales_count===1?'':'s'}`:'Your account has no confirmed completed sales this period.'}</span>
-          {qualifiedRows.length>5&&<button type="button" aria-expanded={showAll} onClick={()=>setShowAll(v=>!v)}>{showAll?'Show top 5':'View all agents'} →</button>}
+
         </div>
       </>}
     <p className={styles.note}>Based on agent-confirmed completions in RealVolt Transactions, using the recorded sale price and actual completion date. Counts only sales recorded for this brokerage. No commissions are shown.</p>
-  </section>;
+  </section>}</>;
 }
