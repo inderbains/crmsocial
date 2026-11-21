@@ -1,21 +1,39 @@
-REALVOLT v1.5.1 — OPEN HOUSE TYPESCRIPT BUILD FIX
+REALVOLT CRM PIPELINE — DRAG & DROP FIX
+20 November 2026
 
-This is a one-file patch for the Hostinger failure:
-app/open-house-manager.tsx (lines 60–61)
-Argument of type 'string | undefined' is not assignable to parameter of type 'string'.
+WHY IT DID NOT WORK
+The current My Workspace → CRM → Pipeline board has stage dropdowns but no drag/drop handlers.
+This patch adds desktop drag/drop to the EXISTING board. It does not create a second funnel.
 
-Change:
-After the insert for new open house events, an explicit runtime guard
-checks that Supabase returned an event ID. This lets TypeScript establish
-that id is a string before uploading the sheet or cover image.
+WHAT CHANGES
+- Drag a contact card from any stage to another stage.
+- The destination column highlights while hovering.
+- The card moves immediately and saves to Supabase crm_contacts.stage using the same signed-in user's permissions.
+- If the save fails, the card returns to its original column and displays an error.
+- Existing 'Move to' dropdown remains available for phones, touch devices and keyboard navigation.
+- Filters are reset to All stages after a manual move so the card remains visible.
+- Existing clean RealVolt layout/colors remain unchanged.
 
-INSTALL:
-1. Extract this ZIP.
-2. In your existing GitHub repository, replace ONLY:
-   app/open-house-manager.tsx
-3. Commit changes. Hostinger should rebuild automatically.
-4. No SQL migration is necessary for this patch. Keep any
-   supabase/021_open_house_qr_checkin.sql migration you already applied.
+FILES
+  app/crm.tsx            ← REPLACE this file in the SAME PATH in your GitHub repository
+  PATCH_CHANGES.diff     ← Unified diff for reviewing/merging instead of replacing
 
-No other RealVolt code or files need replacing.
-This has not been validated against your live Hostinger deployment.
+INSTALL
+1. In GitHub repository inderbains/crmsocial, branch main, back up app/crm.tsx.
+2. Open app/crm.tsx and replace its full content with the supplied app/crm.tsx.
+   IMPORTANT: compare first if you edited app/crm.tsx since your 20-Nov project export.
+   If it has newer changes, merge PATCH_CHANGES.diff instead of overwriting them.
+3. Commit to main. Hostinger should rebuild automatically.
+4. Visit My Workspace → CRM → Pipeline. Drag the body of a contact card from New to Contacted.
+5. Refresh the page: the new stage should persist.
+6. On phone/touch, use the existing Move to dropdown instead of dragging.
+
+SUPABASE
+No SQL changes or migrations are required. Your 023/030 automation triggers remain as-is.
+This UI patch does not activate scheduled automation workers or new external integrations.
+
+VALIDATION
+- TSX syntax parsed successfully (no parser errors).
+- Existing CRM CSV and real estate CRM phase-one tests: 10/10 passed.
+- A full Next.js production build and live Supabase behavior were NOT verified here.
+- If Hostinger shows a new build error, send the entire new error log.
