@@ -1,39 +1,6 @@
-REALVOLT CRM PIPELINE — DRAG & DROP FIX
-20 November 2026
-
-WHY IT DID NOT WORK
-The current My Workspace → CRM → Pipeline board has stage dropdowns but no drag/drop handlers.
-This patch adds desktop drag/drop to the EXISTING board. It does not create a second funnel.
-
-WHAT CHANGES
-- Drag a contact card from any stage to another stage.
-- The destination column highlights while hovering.
-- The card moves immediately and saves to Supabase crm_contacts.stage using the same signed-in user's permissions.
-- If the save fails, the card returns to its original column and displays an error.
-- Existing 'Move to' dropdown remains available for phones, touch devices and keyboard navigation.
-- Filters are reset to All stages after a manual move so the card remains visible.
-- Existing clean RealVolt layout/colors remain unchanged.
-
-FILES
-  app/crm.tsx            ← REPLACE this file in the SAME PATH in your GitHub repository
-  PATCH_CHANGES.diff     ← Unified diff for reviewing/merging instead of replacing
-
-INSTALL
-1. In GitHub repository inderbains/crmsocial, branch main, back up app/crm.tsx.
-2. Open app/crm.tsx and replace its full content with the supplied app/crm.tsx.
-   IMPORTANT: compare first if you edited app/crm.tsx since your 20-Nov project export.
-   If it has newer changes, merge PATCH_CHANGES.diff instead of overwriting them.
-3. Commit to main. Hostinger should rebuild automatically.
-4. Visit My Workspace → CRM → Pipeline. Drag the body of a contact card from New to Contacted.
-5. Refresh the page: the new stage should persist.
-6. On phone/touch, use the existing Move to dropdown instead of dragging.
-
-SUPABASE
-No SQL changes or migrations are required. Your 023/030 automation triggers remain as-is.
-This UI patch does not activate scheduled automation workers or new external integrations.
-
-VALIDATION
-- TSX syntax parsed successfully (no parser errors).
-- Existing CRM CSV and real estate CRM phase-one tests: 10/10 passed.
-- A full Next.js production build and live Supabase behavior were NOT verified here.
-- If Hostinger shows a new build error, send the entire new error log.
+RealVolt 035 hotfix, based on 034.
+1. Run supabase/035_transaction_attachment_fix.sql in Supabase as project owner. Do not rerun 034.
+2. Replace only app/transactions.tsx in GitHub with the matching file in this ZIP (merge if changed since 034).
+3. After build, test removing an unlinked test PDF, attaching a replacement, and marking a test sale firm.
+Removed files are retained in private storage with a metadata record and audit event, not physically erased. Ordinary users cannot download removed files; assigned reviewers can access the retained metadata via API. Protected checklist/lifecycle documents and sent/pending conveyancing records are not silently removed.
+No Edge Functions or other code changes. Live database execution and full build remain untested.
