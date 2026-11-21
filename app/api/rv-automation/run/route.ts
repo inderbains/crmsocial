@@ -96,5 +96,17 @@ export async function POST(request:NextRequest){
       if(failError)console.error('Could not reschedule automation job',id,failError.message);
     }
   }
-  return reply({claimed:(claimed||[]).length,completed:completed.length,retryScheduled:failed.length,stopped:stopped.length});
+  // Step 4: scan stale agent leads and create one private follow-up task per eligible contact.
+  // This is idempotent, service-role-only, and never sends emails or SMS.
+  // Opt-in rollout: default OFF so an old CRM database does not suddenly create a large backlog.
+  const nudgesEnabled=process.env.REALVOLT_ENABLE_STALE_LEAD_NUDGES==='true';
+  let followupsCreated=0;
+  if(nudgesEnabled){
+    const {data,error:followupError}=await db.rpc('rvcrm_schedule_followups',{p_limit:25});
+    if(followupError)return reply({error:'Follow-up scheduler unavailable. Install SQL 031.',detail:followupError.message,
+      claimed:(claimed||[]).length,completed:completed.length,retryScheduled:failed.length,stopped:stopped.length},503);
+    followupsCreated=data||0;
+  }
+  return reply({claimed:(claimed||[]).length,completed:completed.length,retryScheduled:failed.length,stopped:stopped.length,
+    staleLeadNudgesEnabled:nudgesEnabled,followupsCreated});
 }
