@@ -21,3 +21,14 @@
 .compLabel{font-size:12px;line-height:1.55;color:#7b877f;margin-top:13px}
 @media(max-width:900px){.gridTwo{grid-template-columns:1fr}.wrap{padding:12px 0 40px}.panel{padding:19px}}
 @media print{.head button,.form,.row button{display:none!important}.wrap{max-width:100%;padding:0}.panel{box-shadow:none;break-inside:avoid}}
+/* Automatic CMA results — restrained, readable, no extra dashboard cards */
+.sourceSection{display:grid;gap:12px;background:#fbfcfa;border:1px solid #e0e8df;border-radius:12px;padding:15px;min-width:0}
+.saleList{display:grid;gap:0;max-height:380px;overflow:auto;border:1px solid #e6ece5;border-radius:10px;background:white}
+.saleRow{display:flex!important;align-items:center;gap:11px;padding:12px!important;margin:0!important;border-bottom:1px solid #eef2ed;cursor:pointer;font-weight:400!important}
+.saleRow:last-child{border-bottom:0}
+.saleRow input{width:17px!important;height:17px!important;min-width:17px;accent-color:#184936;padding:0!important}
+.saleDetails{display:flex;flex-direction:column;flex:1;min-width:0;gap:4px}
+.saleDetails strong{font-size:12px;color:#194635}
+.saleDetails small{color:#748277;font-size:11px;line-height:1.5}
+.saleRow>strong{white-space:nowrap;font-size:13px;color:#194635}
+@media(max-width:600px){.saleRow{flex-wrap:wrap}.saleRow>strong{margin-left:28px}}

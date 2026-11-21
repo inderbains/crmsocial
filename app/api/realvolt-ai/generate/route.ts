@@ -1,6 +1,7 @@
 import {NextResponse,type NextRequest} from 'next/server';
 import {createClient} from '@supabase/supabase-js';
 import {computeCma,type CmaInputs} from '../../../../lib/rv-ai-cma';
+import {ensureSoldDataAccess,verifySelectedSales,SoldDataError} from '../../../../lib/rv-cma-provider';
 export const runtime='nodejs';
 const fail=(error:string,status:number)=>NextResponse.json({error},{status,headers:{'Cache-Control':'no-store'}});
 const uuid=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -24,11 +25,23 @@ export async function POST(req:NextRequest){
  if((count||0)>=15)return fail('AI Studio usage limit reached (15 requests per hour)',429);
  const address=text(body.address,200),details=text(body.details,2500);
  let context:Record<string,unknown>={};let calculation:ReturnType<typeof computeCma>|null=null;
+ let cmaSource='agent-entered sold comparables';
  if(mode==='cma'){
-  const comparables=body.comparables;
-  try{calculation=computeCma({address,areaSqft:Number(body.areaSqft),bedrooms:Number(body.bedrooms),bathrooms:Number(body.bathrooms),comparables} as CmaInputs)}
-  catch(e){return fail(e instanceof Error?e.message:'Invalid comparables',400)}
-  context={subject:{address,areaSqft:body.areaSqft,bedrooms:body.bedrooms,bathrooms:body.bathrooms,details},calculation};
+  let comparables=body.comparables;
+  let subjectArea=Number(body.areaSqft);
+  try{
+   if(body.autoLookup===true){
+    ensureSoldDataAccess(user.id);
+    const ids=body.selectedMlsNumbers;
+    if(!Array.isArray(ids))return fail('Select MLS sold properties before generating.',400);
+    const result=await verifySelectedSales({address,bedrooms:Number(body.bedrooms),bathrooms:Number(body.bathrooms),areaSqft:subjectArea>0?subjectArea:undefined},ids);
+    if(!subjectArea)subjectArea=result.discovery.subject.areaSqft||0;
+    comparables=result.sales.map(c=>({address:c.address,soldPrice:c.soldPrice,areaSqft:c.areaSqft,soldDate:c.soldDate,mlsNumber:c.mlsNumber}));
+    cmaSource='agent-selected Repliers MLS sold listings (re-verified)';
+   }
+   calculation=computeCma({address,areaSqft:subjectArea,bedrooms:Number(body.bedrooms),bathrooms:Number(body.bathrooms),comparables} as CmaInputs);
+  }catch(e){return fail(e instanceof SoldDataError?e.message:e instanceof Error?e.message:'Invalid comparables',e instanceof SoldDataError?e.status:400)}
+  context={subject:{address,areaSqft:subjectArea,bedrooms:body.bedrooms,bathrooms:body.bathrooms,details},source:cmaSource,calculation};
  } else if(mode==='lead'){
   const id=text(body.contactId,40);if(!uuid.test(id))return fail('Choose an existing CRM contact',400);
   const {data:c,error:contactError}=await db.from('crm_contacts').select('id,full_name,contact_type,stage,preferred_area,budget,communication_consent,source').eq('id',id).eq('user_id',user.id).single();
@@ -47,10 +60,12 @@ export async function POST(req:NextRequest){
  // CMA math works without an AI key; narrative assistance requires an explicit server key.
  const apiKey=process.env.OPENAI_API_KEY;
  if(!apiKey&&mode!=='cma')return fail('AI model not connected. Configure server-only OPENAI_API_KEY.',503);
+ // Do not transmit licensed MLS sold records to an AI provider without separate approval.
+ const canUseAI=!!apiKey&&(mode!=='cma'||cmaSource==='agent-entered sold comparables'||process.env.REALVOLT_CMA_AI_DATA_PROCESSING_APPROVED==='true');
  let result='';
- if(apiKey){
+ if(canUseAI){
   const instructions=mode==='cma'
-   ?'Write a short, professional Canadian REALTOR comparative market analysis narrative using ONLY the supplied comparable sales and deterministic numbers. State how the estimate was calculated. Mention critical omissions: no time, condition, lot, location or other adjustments; valuation is indicative, not a formal appraisal. Do not invent sales, MLS data, or current market trends.'
+   ?'Write a short professional Canadian REALTOR CMA narrative based ONLY on the supplied sold sales, source provenance, and deterministic calculations. Mention MLS soldDate may not equal legal completion date. State method and omitted adjustments (condition, location, lot, time, property rights). This is an indicative analysis, not a formal appraisal. Do not invent other MLS data, adjustments, or current market trends.'
    :mode==='listing'
    ?'Write a polished, accurate Canadian real estate listing description based ONLY on the facts in the structured input. Do not invent square footage, finishes, views, schools, transit distances, zoning, measurements or amenities. No discriminatory language. Do not include an unverified price.'
    :mode==='marketing'
@@ -67,9 +82,9 @@ export async function POST(req:NextRequest){
    if(!result)return fail('AI returned an empty response',502);
   }catch{return fail('AI request timed out. Try again.',502)}
  }else if(calculation){
-  result=`Indicative CMA — ${address}\n\nAgent-entered sold comparables: ${calculation.sampleCount}\nMedian sold price per finished square foot: $${calculation.medianPricePerSqft.toLocaleString('en-CA')}\nCalculated midpoint: $${calculation.estimate.toLocaleString('en-CA')} CAD\nIllustrative range: $${calculation.low.toLocaleString('en-CA')}–$${calculation.high.toLocaleString('en-CA')} CAD\n\n${calculation.methodology}\n\n${calculation.warnings.join(' ')}`;
+  result=`Indicative CMA — ${address}\n\nSource: ${cmaSource}\nComparable sales: ${calculation.sampleCount}\nMedian sold price per finished square foot: $${calculation.medianPricePerSqft.toLocaleString('en-CA')}\nCalculated midpoint: $${calculation.estimate.toLocaleString('en-CA')} CAD\nIllustrative range: $${calculation.low.toLocaleString('en-CA')}–$${calculation.high.toLocaleString('en-CA')} CAD\n\n${calculation.methodology}\n\n${calculation.warnings.join(' ')}`;
  }
  const {error:saveError}=await db.from('rv_ai_generations').insert({user_id:user.id,mode});
  if(saveError)return fail('Result created but usage record failed. Check SQL 032.',503);
- return NextResponse.json({content:result,calculation,reviewRequired:true,sent:false,published:false,source:mode==='cma'?'agent-entered sold comparables':'user and CRM-supplied information'},{headers:{'Cache-Control':'no-store'}});
+ return NextResponse.json({content:result,calculation,reviewRequired:true,sent:false,published:false,source:mode==='cma'?cmaSource:'user and CRM-supplied information'},{headers:{'Cache-Control':'no-store'}});
 }
