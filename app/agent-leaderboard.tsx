@@ -31,6 +31,7 @@ export default function AgentLeaderboard({userId,onBack}:{userId:string;onBack:(
   const [independent,setIndependent] = useState(false);
 
   const reload = useCallback(()=>setRefreshCount(v=>v+1),[]);
+  useEffect(()=>{const timer=setInterval(reload,15000);window.addEventListener('focus',reload);return()=>{clearInterval(timer);window.removeEventListener('focus',reload)}},[reload]);
   useEffect(()=>{
     let active=true;
     async function fetchLeaderboard(){
@@ -70,13 +71,13 @@ export default function AgentLeaderboard({userId,onBack}:{userId:string;onBack:(
     year:'numeric',timeZone:'America/Vancouver',
   }).format(new Date());
   const hasRanking=qualifiedRows.length>0;
-  return <><div className="headrow"><div><p className="eyebrow">BROKERAGE PERFORMANCE</p><h1 style={{marginTop:9}}>Agent Leaderboard</h1><p>Monthly and yearly rankings by completed sales and total sales volume. No commissions.</p></div><button type="button" className="btn" onClick={onBack}>← My workspace</button></div>
+  return <><div className="headrow"><div><p className="eyebrow">BROKERAGE PERFORMANCE</p><h1 style={{marginTop:9}}>Agent Leaderboard</h1><p>Monthly and yearly rankings by firm sales and total sales volume. No commissions.</p></div><button type="button" className="btn" onClick={onBack}>← My workspace</button></div>
   {independent?<section className={styles.shell}><div className={styles.empty}><UsersRound size={24} style={{marginBottom:10}}/><div>This leaderboard is available to members of a brokerage. An independent account has no office rankings.</div></div></section>:<section className={styles.shell} aria-label="Brokerage agent sales leaderboard">
     <div className={styles.header}>
       <div>
         <div className={styles.eyebrow}>BROKERAGE PERFORMANCE</div>
         <h2 className={styles.heading}>Top Agents</h2>
-        <p className={styles.subtitle}>Completed sales · {monthLabel} · CAD</p>
+        <p className={styles.subtitle}>Firm sales · {monthLabel} · CAD</p>
       </div>
       <div className={styles.tools}>
         <div className={styles.segment} role="group" aria-label="Leaderboard period">
@@ -91,8 +92,8 @@ export default function AgentLeaderboard({userId,onBack}:{userId:string;onBack:(
       </div>
     </div>
     {error?<div className={styles.error} role="alert">Could not load leaderboard: {error}. Ensure SQL 033 is installed.</div>
-      :loading?<div className={styles.empty} role="status">Loading completed sales…</div>
-      :!hasRanking?<div className={styles.empty}><UsersRound size={22} style={{marginBottom:10}}/><div>No agent-confirmed completed sales recorded for {monthLabel}.</div></div>
+      :loading?<div className={styles.empty} role="status">Loading firm sales…</div>
+      :!hasRanking?<div className={styles.empty}><UsersRound size={22} style={{marginBottom:10}}/><div>No firm sales recorded with supporting PDF for {monthLabel}.</div></div>
       :<>
         <table className={styles.table}>
           <thead><tr><th scope="col">Rank</th><th scope="col">Agent</th><th scope="col">Sales</th><th scope="col">Volume</th></tr></thead>
@@ -106,10 +107,10 @@ export default function AgentLeaderboard({userId,onBack}:{userId:string;onBack:(
           </tbody>
         </table>
         <div className={styles.footer}>
-          <span className={styles.note}>{own?`Your rank: #${own.rank} · ${own.sales_count} sale${own.sales_count===1?'':'s'}`:'Your account has no confirmed completed sales this period.'}</span>
+          <span className={styles.note}>{own?`Your rank: #${own.rank} · ${own.sales_count} sale${own.sales_count===1?'':'s'}`:'Your account has no confirmed firm sales this period.'}</span>
 
         </div>
       </>}
-    <p className={styles.note}>Based on agent-confirmed completions in RealVolt Transactions, using the recorded sale price and actual completion date. Counts only sales recorded for this brokerage. No commissions are shown.</p>
+    <p className={styles.note}>Based on recorded subject removals / unconditional firm sales in RealVolt Transactions, using the recorded sale price and actual firm sale date. Counts only sales recorded for this brokerage. No commissions are shown.</p>
   </section>}</>;
 }

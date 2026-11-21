@@ -3,7 +3,7 @@ export type Lawyer={id:string;brokerage_id:string;name:string;firm:string;email:
 export type LawyerEntry=Omit<Lawyer,'id'|'brokerage_id'>&{id:string|null};
 export const emptyLawyer=():LawyerEntry=>({id:null,name:'',firm:'',email:'',phone:'',address:''});
 export function hasLawyer(entry:LawyerEntry){return !!entry.id||Object.values(entry).some(v=>typeof v==='string'&&v.trim()!=='')}
-export function matchingLawyers(lawyers:Lawyer[],query:string){const q=query.trim().toLowerCase();return q?lawyers.filter(l=>[l.name,l.firm,l.email].some(v=>v.toLowerCase().includes(q))).slice(0,8):[]}
+export function matchingLawyers(lawyers:Lawyer[],query:string){const q=query.trim().toLowerCase();return q.length>=2?lawyers.filter(l=>[l.name,l.firm].some(v=>v.toLowerCase().includes(q))).slice(0,8):[]}
 export function normalizeLawyer(entry:LawyerEntry){return {name:entry.name.trim(),firm:entry.firm.trim(),email:entry.email.trim().toLowerCase(),phone:entry.phone.trim(),address:entry.address.trim()}}
 export async function saveLawyerEntry(db:SupabaseClient,entry:LawyerEntry):Promise<Lawyer|null>{
  if(!hasLawyer(entry))return null;

@@ -1,6 +1,6 @@
-import {createClient} from '@supabase/supabase-js';
-import Stripe from 'stripe';
-import nodemailer from 'nodemailer';
+import {createClient} from 'npm:@supabase/supabase-js@2.89.0';
+import Stripe from 'npm:stripe@17.7.0';
+import nodemailer from 'npm:nodemailer@^9';
 const cors={'Access-Control-Allow-Origin':'*','Access-Control-Allow-Headers':'authorization, x-client-info, apikey, content-type','Access-Control-Allow-Methods':'POST, OPTIONS'};
 const reply=(v:unknown,status=200)=>new Response(JSON.stringify(v),{status,headers:{...cors,'Content-Type':'application/json'}});
 Deno.serve(async(req:Request)=>{if(req.method==='OPTIONS')return new Response('ok',{headers:cors});if(req.method!=='POST')return reply({error:'POST required'},405);
@@ -9,7 +9,8 @@ const body=await req.json(),p=await db.from('office_agents').select('*').eq('id'
 const m=await db.from('brokerage_members').select('*').eq('user_id',u.data.user.id).single();const admin=m.data?.role==='admin'&&m.data.brokerage_id===a.brokerage_id;
 const app=Deno.env.get('APP_URL');if(!app)return reply({error:'Configure APP_URL'},503);
 if(body.action==='invite'){if(!admin)return reply({error:'Brokerage admin required'},403);if(a.status!=='Invited'||a.user_id)return reply({error:'Agent already enrolled'},409);
- const renewed=await db.from('office_agents').update({invitation_expires_at:new Date(Date.now()+14*86400000).toISOString()}).eq('id',a.id);if(renewed.error)throw renewed.error;const link=await db.auth.admin.generateLink({type:'magiclink',email:a.email,options:{redirectTo:app+'/?onboard='+a.id}});if(link.error)throw link.error;
+ const renewed=await db.from('office_agents').update({invitation_expires_at:new Date(Date.now()+14*86400000).toISOString()}).eq('id',a.id);if(renewed.error)throw renewed.error;const link=await db.auth.admin.generateLink({type:'magiclink',email:a.email,options:{redirectTo:app.replace(/\/+$/, '')+'/workspace/?onboard='+encodeURIComponent(a.id)}});if(link.error)throw link.error;
+ const existingMembership=await db.from('brokerage_members').select('user_id').eq('user_id',link.data.user.id).maybeSingle();if(existingMembership.error)throw existingMembership.error;if(existingMembership.data)return reply({error:'This email already has a RealVolt brokerage membership. Use a different email or request an authorized account transfer.'},409);
  // The invitation link is sensitive: it must only be sent through the selected provider,
  // never returned to the browser, stored in logs, or included in debug messages.
  const inviteText=`Hello ${a.full_name},\n\nYour brokerage has invited you to RealVolt. Open the secure link to sign in and complete your profile:\n\n${link.data.properties.action_link}\n\nOnce signed in, review your commission plan and fees securely inside RealVolt.\n\nIf you did not expect this invitation, contact your brokerage.`;

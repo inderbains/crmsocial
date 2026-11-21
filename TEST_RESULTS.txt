@@ -1,0 +1,70 @@
+TAP version 13
+# Subtest: buyer-side deposit retains only own gross plus GST, both sides recorded
+ok 1 - buyer-side deposit retains only own gross plus GST, both sides recorded
+  ---
+  duration_ms: 0.969523
+  type: 'test'
+  ...
+# Subtest: seller-side deposit may be held by our brokerage
+ok 2 - seller-side deposit may be held by our brokerage
+  ---
+  duration_ms: 0.161947
+  type: 'test'
+  ...
+# Subtest: other brokerage deposit is not our money
+ok 3 - other brokerage deposit is not our money
+  ---
+  duration_ms: 0.154076
+  type: 'test'
+  ...
+# Subtest: deposit shortage never produces negative balance
+ok 4 - deposit shortage never produces negative balance
+  ---
+  duration_ms: 0.108519
+  type: 'test'
+  ...
+# Subtest: CIR contains no agent split or monthly deduction data
+ok 5 - CIR contains no agent split or monthly deduction data
+  ---
+  duration_ms: 13.827719
+  type: 'test'
+  ...
+# Subtest: conditional sale does not route to accounting even after scheduled completion passes
+ok 6 - conditional sale does not route to accounting even after scheduled completion passes
+  ---
+  duration_ms: 0.304477
+  type: 'test'
+  ...
+# Subtest: firm sale awaits real completion, not scheduled date
+ok 7 - firm sale awaits real completion, not scheduled date
+  ---
+  duration_ms: 0.137202
+  type: 'test'
+  ...
+# Subtest: completed sale awaits cleared commission receipt
+ok 8 - completed sale awaits cleared commission receipt
+  ---
+  duration_ms: 0.106096
+  type: 'test'
+  ...
+# Subtest: leaderboard SQL uses firm date and explicit stage, not scheduled completion
+ok 9 - leaderboard SQL uses firm date and explicit stage, not scheduled completion
+  ---
+  duration_ms: 0.304777
+  type: 'test'
+  ...
+# Subtest: payout guard present, confirmation separate from receipt, privileged function permissions explicit
+ok 10 - payout guard present, confirmation separate from receipt, privileged function permissions explicit
+  ---
+  duration_ms: 0.330875
+  type: 'test'
+  ...
+1..10
+# tests 10
+# suites 0
+# pass 10
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 85.703493
