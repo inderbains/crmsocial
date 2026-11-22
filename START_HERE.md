@@ -1,81 +1,66 @@
-# RealVolt Fix 040 — One compact Back Office dashboard + Deal stages
+# RealVolt Fix 044 — Staged Compliance, Final PDFs & Closed File Folders
 
-## Why this patch
+**Prepared from the user-uploaded `crmsocial-main (4).zip` project**, not the unverified newest live GitHub commit. This is a code patch, not a live deployment. Do not overwrite newer GitHub versions of existing files blindly.
 
-The Back Office screen showed two competing dashboards: a large standalone **Office transaction updates** panel above the office name, then another compact **Office updates** panel below the heading. The earlier **Automatic transaction workflow** was also no longer visible after the dashboard redesign.
+## 1. Contents
 
-Fix 040 **removes only the redundant office-mode top panel** and keeps the original Back Office module cards, Accounting, Reporting, Compliance, trust accounting, cheque printing and other features. It preserves the transaction workflow as an optional fifth tab, **Deal stages**, inside the existing compact panel. It is not an automation that releases commission or sends emails.
+- `supabase/044_staged_compliance_archive.sql`: brokerage form templates, stage-based checklists, missing-document and archive guards, audit-ready closed-folder manifest.
+- `app/deal-admin.tsx`: groups document requirements by Listing, Accepted Offer, Firm Sale, Completion; supports document linking and verification, a reasoned "N/A", and notifying the agent.
+- `app/brokerage-compliance-rules.tsx`: brokerage-level template editor; new required forms can be added for future and open files.
+- `app/back-office.tsx`: connects the previously unlinked **Financial & compliance** route to the existing oversight screen and the new form-template editor.
+- `app/transactions.tsx`, `app/transaction-actions.tsx`: shows the closing folder, calls the guarded archive action.
+- `app/closing-panel.tsx`: allows saving the existing CIR preview as an internal file PDF; **does not automatically email lawyers**.
+- `app/compliance-closing-panel.tsx`: generates and saves the brokerage completion confirmation and internal commission-payable PDFs after a payout is marked Paid; renders a read-only file folder after archive.
+- `lib/transaction-document-save.ts`: authenticated append-only upload to the existing private transaction bucket and checklist linkage.
+- `supabase/functions/closing-packet/index.ts`: explicitly blocks FINTRAC/identity and internal commission attachments from lawyer emails. **Redeploy this function on Supabase after merge; GitHub alone does not deploy it.**
+- `scripts/apply-fix-044.mjs`: careful anchored merge into a current repo, with `.txt` backups; aborts if expected source is different.
+- `tests/transaction-compliance-044.test.mjs`: focused static tests of the new code and safeguards.
 
-### Target screen order
+## 2. Staged documents
 
-1. `IB REAL ESTATE · BROKERAGE OPERATIONS` (whatever the brokerage's actual name is)
-2. **Back Office** heading and Refresh
-3. **One** sage-green compact Office updates panel, ~242 px tall on desktop:
-   - Left: three existing small counters — submitted files, document checks, bank reconciliations
-   - Right: New files, Review, Upcoming, Activity, **Deal stages** tabs with count badges
-   - No tab open until the user clicks; the right-hand results scroll within this box, at most three items initially
-4. Original full-size orange-icon **Applications & tools** cards, including Accounting, Reporting and Compliance
+| Stage | Seller-side listing/sale | Buyer-side direct sale |
+|---|---|---|
+| New listing | Signed listing contract, MLS listing sheet/details, disclosure, FINTRAC identity verification; optional addendum | Not applicable |
+| Accepted offer | CPS, commission disclosure; optional addendum | CPS, disclosure of services/representation, FINTRAC buyer ID verification; optional addendum |
+| Subjects removed (firm) | Signed subject removal/unconditional contract, trade record sheet, sale report; optional extension/addendum | Signed subject removal/unconditional contract, deposit cheque or deposit receipt; optional extension/addendum |
+| Legal completion & close | Lawyer completion letter, brokerage completion confirmation PDF, CIR PDF and **internal** commission payable PDF | Same final requirements |
 
-On narrow screens, the office box stacks naturally and no fixed height is forced.
+The company can add/change requirements under **Back Office → Compliance → Manage form requirements**. Existing files keep their recorded history; disabling a template affects new applications. Back Office can mark a genuinely inapplicable requirement N/A **with a reason**. This is your requested initial checklist, **not a legal assertion that these are all forms required in BC**. The managing broker must verify final requirements.
 
-### Automatic transaction workflow (restored in compact form)
+## 3. Safe installation order
 
-This was the per-deal routing/status tracker. It computes each deal's stage, approximate progress, the responsible party (agent, Back Office or accounting), and the recommended next module/action based on existing transaction, document, trust, conveyancing and payout records. Clicking a Deal stages item opens the responsible module and stores the transaction ID for any integration already listening for it. **It is an operational checklist, not an automatic legal or financial action.**
+1. **Back up** the current GitHub branch and Supabase production database. Test in a *separate staging project* before production.
+2. Run **the complete** `supabase/044_staged_compliance_archive.sql` in the staging Supabase SQL Editor. It requires prior SQL 006, 034 and 035. Do not re-run earlier migrations. **Run 044 once**; it changes existing checklists and adds tables/triggers.
+3. Download/clone the **current** GitHub `inderbains/crmsocial` project. Extract this release *outside* the repo. From a terminal:
 
-## Recommended installation using the guarded script
-
-**Back up your current main branch first.** Download a *fresh* checkout of the current GitHub repository and extract it. Extract Fix 040 separately. With Node.js installed, run:
-
-```bash
-node path/to/Fix040/scripts/apply-realvolt-040.mjs path/to/crmsocial-main
-cd path/to/crmsocial-main
-npm run build
-```
-
-The installer checks that Fix 039's **original module cards** and compact inbox exist before changing anything. It updates only:
-
-- `app/back-office-dashboard.tsx`
-- `app/SmartInbox037.tsx`
-- `app/SmartInbox037.module.css`
-- `app/back-office.tsx` **only when the redundant office top panel or missing `userId` is found**
-- `app/realvolt-workspace.tsx` **only if an exact redundant office-only TransactionUpdates instance is found there**
-
-No application files other than these are altered. Backups of every changed file are made in a temporary directory; the script prints the path. It doesn't change transaction state, payments, accounts, or records.
-
-If it reports a different code structure, **don't force overwrite**. Provide your current repo ZIP so the merge can be adjusted.
-
-## If you are working directly in GitHub's website
-
-1. Open the repository `app/` folder and replace just these three files from the `app` directory in this ZIP:
-   - `back-office-dashboard.tsx`
-   - `SmartInbox037.tsx`
-   - `SmartInbox037.module.css`
-2. Open `app/back-office.tsx` in GitHub's editor. Find the **Back Office Dashboard** rendering branch (`if(view==='Dashboard')`). Remove the **old** panel, if present:
-
-   ```tsx
-   <section className="panel personal-dates-card"><TransactionUpdates userId={userId} office/></section>
+   ```bash
+   node /path/to/RealVolt_044/scripts/apply-fix-044.mjs /path/to/crmsocial --dry-run
+   node /path/to/RealVolt_044/scripts/apply-fix-044.mjs /path/to/crmsocial
+   cd /path/to/crmsocial
+   npm install
+   npm run build
    ```
 
-   Keep the adjacent `<BackOfficeDashboard .../>` component. If this was the only use of `TransactionUpdates` in that file, remove its now-unused import too.
-3. The `BackOfficeDashboard` opening tag should include `userId={userId}`; leave every other prop untouched.
-4. **Do not remove** the agent's regular `TransactionUpdates` from `app/personal-dates.tsx`; this patch is limited to Back Office.
-5. Do not upload the ZIP itself or its `scripts/`, `tests/`, or documentation as application source files.
-6. Commit and wait for Hostinger. Run `npm run build` in a full local checkout first if possible.
+   On Windows, quote the paths with spaces. The installer creates `rv044-original-backups/` with `.txt` backups of modified source files. It does **not** modify Supabase or deploy to GitHub.
+4. Commit the changes to GitHub only after the staging build succeeds. Deploy the updated `supabase/functions/closing-packet/index.ts` and the existing `_shared` function files to Supabase Edge Functions separately. Check email sender settings before enabling sends.
+5. Test with a fresh listing, accepted-offer seller file, and direct buyer sale. Verify each checklist stage and test incomplete submissions, document-link review, signed extension, firm status, CIR preview/save, completion, payout, PDFs and archive. Also confirm data isolation from another brokerage.
 
-## Verification
+### If you upload via the GitHub website only
 
-- The Back Office page starts at the brokerage's name; there is no top large Office transaction updates panel.
-- Only one compact Office updates panel appears, **below** the Back Office heading, at the same height when tabs open.
-- New files, Review, Upcoming, Activity and Deal stages count badges are visible. Results appear only after clicking one.
-- Deal stages shows address, stage, progress and next responsible action; tapping opens the relevant module.
-- The large orange-icon module cards still appear unchanged.
-- Trust & bank, Bank reconciliation, Agent payments, Accounting, Reporting and Compliance all still open normally.
-- Check one known approved listing and one firm sale; do not test with actual trust disbursements.
+New files to create: `app/compliance-closing-panel.tsx`, `app/brokerage-compliance-rules.tsx`, `lib/transaction-document-save.ts`, and `supabase/044_staged_compliance_archive.sql`.
 
-## Supabase / database
+Existing files that **must be merged**, not blindly overwritten if the latest GitHub differs from `crmsocial-main (4).zip`: `app/transactions.tsx`, `app/deal-admin.tsx`, `app/transaction-actions.tsx`, `app/closing-panel.tsx`, `app/back-office.tsx`, `supabase/functions/closing-packet/index.ts`. The package includes reference versions of these files, but manual upload over newer code could remove fixes 040–043.
 
-**No new SQL or Edge Function is required for this targeted UI patch.** It relies on the existing 034/035 database and workflow components from previous upgrades.
+## 4. After completion
 
-## Testing limitations
+In Back Office, a sale stays **Sold** after subjects are removed. After legal completion the administrator uploads the lawyer letter and confirms completion, verifies cleared commission receipt and makes the internal agent split/payout. When that payout is **Paid**, use **Generate and attach closing PDFs**. Generate CIR from **CIR and letter to complete → Preview → Save CIR PDF to transaction file** (or upload an existing final CIR). Link and verify all required documents, then select **Close / archive file**.
 
-Eight focused source tests passed. The TSX syntax was transpiled without errors and the installer was tested on an available 039-style reference checkout (including a deliberately injected old top panel). **The current remote GitHub branch and a full Hostinger production build have not been independently verified**; only deploy after testing against a fresh local copy of the current repo.
+The archive records one **read-only manifest** of all documents, organized by stage, under the existing private `transaction-files` path of the deal. It does **not** physically move files, create a downloadable ZIP, erase historical versions, or transmit files to lawyers. This deliberate retention protects the audit trail. Bank reconciliation remains a separate monthly financial workflow; a closed transaction is not automatically a reconciled bank statement.
+
+## 5. Limitations and testing
+
+- 11 new **static** tests pass, and the changed files pass TSX/TypeScript syntax checks. The anchored installer was tested against the actual uploaded source and again for idempotence.
+- A full `npm run build` could **not** be performed here because the dependency cache is unavailable offline. Neither the migration nor external Edge Functions have been exercised against live Supabase.
+- Your earlier 034/035 code and finance controls still need real end-to-end staging tests; especially trust entries, reconciliation and segregation of duties. Do not enable automatic financial payouts from this compliance screen.
+- Existing archived files are not automatically converted into new archive manifests; the new manifest is created when a file is closed after applying 044.
+- **Do not attach internal commission statements or FINTRAC ID files to lawyer emails.** The updated server-side exclusion applies after re-deployment of `closing-packet`.
