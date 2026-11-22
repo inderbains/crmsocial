@@ -1,0 +1,73 @@
+/* RealVolt 037 — shared, compact, quiet notification interface */
+.personalCard,.officeCard{background:var(--rv-workspace-sage,#e8eee1);border:1px solid #dce6d6;border-radius:16px;color:var(--brand-dark,#193e32)}
+.personalCard{padding:20px 26px;margin:14px 0 18px;position:relative}
+.personalMain{display:grid;grid-template-columns:minmax(0,40%) minmax(0,60%);min-height:280px;gap:0}
+.personalLeft{padding:4px 28px 8px 0;min-width:0}
+.personalRight{border-left:1px solid #ccd8c6;padding:52px 0 8px 24px;min-width:0}
+.personalTopButton{position:absolute;right:26px;top:22px;z-index:1}
+.eyebrow{font-size:10px;letter-spacing:1.8px;text-transform:uppercase;font-weight:800;color:#284e3b;margin:0 0 8px}
+.personalLeft h2,.officeLeft h2{font-size:22px;line-height:1.2;letter-spacing:-.5px;margin:0 0 4px;color:var(--brand-dark,#193e32)}
+.subtle{font-size:12px;color:#738477;margin:0;line-height:1.5}
+.personTabs{display:flex;gap:7px;margin:22px 0 10px;flex-wrap:wrap}
+.personTab{font-size:12px;border:1px solid transparent;border-radius:24px;background:#fff;color:#607468;padding:8px 14px;cursor:pointer}
+.personTabActive{background:var(--brand-dark,#193e32);color:#fff}
+.personDate{border:0;background:transparent;display:flex;gap:10px;align-items:center;text-align:left;width:100%;padding:6px 0;cursor:pointer;color:#193e32;min-width:0}
+.dateBadge{background:#fff;border-radius:7px;padding:4px 7px;text-align:center;min-width:47px;font-weight:700;font-size:12px;color:#193e32}
+.personDateText{min-width:0;display:grid;gap:2px}.personDateText strong{font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.personDateText small{font-size:11px;color:#77887c}
+.personEmpty{font-size:12px;color:#839188;margin:14px 0}
+.inbox{max-width:100%;min-width:0}
+.tabs{display:flex;gap:7px;flex-wrap:wrap;align-items:center}
+.tab{border:1px solid #cbd8c5;background:rgba(255,255,255,.55);color:#234735;padding:8px 10px;min-height:33px;border-radius:9px;font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;gap:6px;cursor:pointer;white-space:nowrap}
+.tab:hover{background:white}.active{background:var(--brand-dark,#193e32);border-color:var(--brand-dark,#193e32);color:#fff}
+.count{display:inline-flex;justify-content:center;align-items:center;min-width:19px;height:19px;padding:0 4px;font-size:10px;font-weight:800;border-radius:10px;background:#dfe8d9;color:#193e32}
+.active .count{background:#e2f0cc;color:#193e32}
+.results{margin-top:13px;height:159px;min-width:0;overflow-y:auto;overscroll-behavior:contain}
+.item{display:flex;gap:8px;width:100%;align-items:center;text-align:left;padding:9px 6px;border:0;border-bottom:1px solid #d2ddcd;background:transparent;cursor:pointer;color:#193e32;min-height:43px;border-radius:5px}
+.item:hover{background:rgba(255,255,255,.60)}.item:last-child{border-bottom:0}
+.dot{width:6px;height:6px;flex-shrink:0;border-radius:50%;background:#a1b7a1}.unread .dot{background:var(--brand-accent,#d75b29)}
+.itemText{display:grid;gap:3px;min-width:0;flex:1}.itemText strong{font-size:12px;line-height:1.2;white-space:nowrap;text-overflow:ellipsis;overflow:hidden}.itemText small{font-size:10px;color:#75867a;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.chevron{color:#708579;font-size:18px;line-height:1}
+.moreButton{border:0;background:transparent;color:#193e32;font-size:11px;font-weight:750;cursor:pointer;padding:5px 0}
+.empty{font-size:12px;color:#849286;margin:10px 0}.more{font-size:10px;color:#748579;margin:6px 0}
+.editor{border-top:1px solid #cad9c6;margin-top:12px;padding-top:12px}.editorGrid{display:grid;grid-template-columns:1fr 160px;gap:10px}.editor label{display:grid;gap:4px;font-size:12px;font-weight:700}.editor input,.editor textarea{background:#fff;border:1px solid #bccab8;border-radius:7px;padding:8px;width:100%;color:#193e32}.editorActions{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
+.officeCard{display:grid;grid-template-columns:minmax(0,40%) minmax(0,60%);padding:20px 26px;min-height:226px;gap:0}
+.officeLeft{padding:2px 25px 0 0}.officeRight{border-left:1px solid #cad9c5;padding-left:24px;min-width:0}
+.officePreview{margin:20px 0 0;display:grid;gap:9px}.officePreview button{border:0;background:transparent;padding:0;text-align:left;display:flex;align-items:center;gap:8px;color:#254535;font-size:12px;cursor:pointer}.officePreview b{min-width:22px;text-align:center;border-radius:6px;padding:3px;background:#fff;color:#193e32}
+@media(max-width:900px){.personalMain,.officeCard{grid-template-columns:1fr}.personalLeft,.officeLeft{padding-right:0}.personalRight,.officeRight{border-left:0;border-top:1px solid #cad9c5;padding:14px 0 0;margin-top:14px}.personalRight{padding-top:18px}.personalTopButton{right:18px;top:18px}.personalCard,.officeCard{padding:18px}.personalLeft{padding-right:145px;min-height:160px}.officePreview{margin:10px 0}.results{height:auto;max-height:215px}}
+@media(max-width:540px){.personalLeft{padding-right:0;padding-top:45px}.personalTopButton{left:18px;right:auto}.tabs{gap:5px}.tab{padding:7px 8px}.editorGrid{grid-template-columns:1fr}}
+
+/* Fix 040: office dashboard is one short section; no second block is rendered above it. */
+.officeCard{height:242px;min-height:0;max-height:242px;box-sizing:border-box;overflow:hidden}
+.officeLeft{min-width:0}
+.officeLeft h2{font-size:20px}
+.officePreview{margin:14px 0 0;gap:7px}
+.officeRight .results{height:130px;max-height:130px;overflow-y:auto}
+.officeRight .tabs{gap:5px}
+.officeRight .tab{padding:6px 8px;min-height:30px}
+@media(max-width:900px){.officeCard{height:auto;max-height:none;min-height:0;overflow:visible}.officeRight .results{height:auto;max-height:165px}}
+
+/* Thin progress indicator only inside the on-demand Deal stages tab */
+.progressTrack{display:block;width:100%;max-width:240px;height:3px;margin-top:2px;border-radius:9px;background:#cddac8;overflow:hidden}.progressFill{display:block;height:100%;background:var(--brand-dark,#193e32)}
+
+/* Fix 045 — compact editable quote / sales goals for home dashboards only. */
+.personalMain{grid-template-columns:minmax(0,42%) minmax(0,58%);min-height:258px}
+.personalLeft{padding-top:3px}
+.personalRight{padding-top:42px}
+.personalRight .tabs{gap:5px}
+.personalRight .tab{padding:6px 8px;min-height:28px;font-size:10.5px}
+.personalRight .results{height:137px;max-height:137px}
+.quoteDisplay{border:0;background:transparent;padding:2px 4px 4px 0;display:block;width:100%;max-width:100%;text-align:left;cursor:pointer;color:var(--brand-dark,#193e32);font-size:16px;font-style:italic;font-weight:650;line-height:1.42;min-height:63px}
+.quoteDisplay span:first-child{display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;overflow-wrap:anywhere}
+.quoteDisplay:hover span:first-child{text-decoration:underline;text-decoration-color:#9bb09a;text-underline-offset:3px}
+.quoteEditor{min-height:63px;display:grid;gap:5px}.quoteEditor textarea{width:100%;font-family:inherit;background:transparent;border:0;border-bottom:1px solid #91ac90;border-radius:0;padding:2px 0 4px;color:#193e32;font-size:16px;font-style:italic;font-weight:650;line-height:1.42;resize:none;min-height:52px;max-height:80px;outline:none}.quoteEditor textarea:focus{border-bottom-color:#193e32}
+.srOnly{position:absolute!important;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
+.miniActions,.goalForm{display:flex;gap:7px;align-items:center;flex-wrap:wrap}.miniActions button,.goalForm button{border:1px solid #c0d0bd;background:white;color:#193e32;border-radius:6px;font-size:10px;font-weight:700;padding:5px 9px;cursor:pointer}
+.miniActions .miniPrimary,.goalForm .miniPrimary{background:var(--brand-dark,#193e32);color:white;border-color:var(--brand-dark,#193e32)}
+.goalHeader{display:flex;align-items:center;justify-content:space-between;gap:8px;border-top:1px solid #cbd8c5;padding-top:13px;margin-top:10px;font-size:12px;font-weight:750;color:#193e32}
+.goalEdit{border:0;background:transparent;font-size:11px;font-weight:700;text-decoration:underline;text-underline-offset:3px;color:#193e32;cursor:pointer;padding:3px 4px;border-radius:4px}.goalEdit:hover{background:rgba(255,255,255,.7)}
+.goalNumbers{display:flex;gap:8px;align-items:baseline;margin:4px 0 8px;color:#193e32}.goalNumbers strong{font-size:27px;line-height:1.1}.goalNumbers span{font-size:12px;color:#667d6d}
+.goalTrack{height:7px;width:100%;background:#c8d8c2;border-radius:10px;overflow:hidden}.goalFill{background:var(--brand-dark,#193e32);height:100%;border-radius:10px;transition:width .2s}
+.goalMessage{font-size:11px;color:#43604a;margin:8px 0 0}.goalError{font-size:10px;color:#9f3a2c;margin:5px 0 0}
+.goalForm{margin-top:10px}.goalForm input{width:73px;font-size:12px;border:1px solid #b6cbb3;border-radius:6px;padding:5px;color:#193e32;background:white}
+@media(max-width:900px){.personalMain{grid-template-columns:1fr;min-height:0}.personalLeft{padding-right:125px;min-height:0}.personalRight{padding:14px 0 0;margin-top:14px}.personalRight .results{height:auto;max-height:170px}}
+@media(max-width:540px){.personalLeft{padding:45px 0 0}.quoteDisplay{font-size:15px}}
