@@ -35,3 +35,16 @@
 .officePreview{margin:20px 0 0;display:grid;gap:9px}.officePreview button{border:0;background:transparent;padding:0;text-align:left;display:flex;align-items:center;gap:8px;color:#254535;font-size:12px;cursor:pointer}.officePreview b{min-width:22px;text-align:center;border-radius:6px;padding:3px;background:#fff;color:#193e32}
 @media(max-width:900px){.personalMain,.officeCard{grid-template-columns:1fr}.personalLeft,.officeLeft{padding-right:0}.personalRight,.officeRight{border-left:0;border-top:1px solid #cad9c5;padding:14px 0 0;margin-top:14px}.personalRight{padding-top:18px}.personalTopButton{right:18px;top:18px}.personalCard,.officeCard{padding:18px}.personalLeft{padding-right:145px;min-height:160px}.officePreview{margin:10px 0}.results{height:auto;max-height:215px}}
 @media(max-width:540px){.personalLeft{padding-right:0;padding-top:45px}.personalTopButton{left:18px;right:auto}.tabs{gap:5px}.tab{padding:7px 8px}.editorGrid{grid-template-columns:1fr}}
+
+/* Fix 040: office dashboard is one short section; no second block is rendered above it. */
+.officeCard{height:242px;min-height:0;max-height:242px;box-sizing:border-box;overflow:hidden}
+.officeLeft{min-width:0}
+.officeLeft h2{font-size:20px}
+.officePreview{margin:14px 0 0;gap:7px}
+.officeRight .results{height:130px;max-height:130px;overflow-y:auto}
+.officeRight .tabs{gap:5px}
+.officeRight .tab{padding:6px 8px;min-height:30px}
+@media(max-width:900px){.officeCard{height:auto;max-height:none;min-height:0;overflow:visible}.officeRight .results{height:auto;max-height:165px}}
+
+/* Thin progress indicator only inside the on-demand Deal stages tab */
+.progressTrack{display:block;width:100%;max-width:240px;height:3px;margin-top:2px;border-radius:9px;background:#cddac8;overflow:hidden}.progressFill{display:block;height:100%;background:var(--brand-dark,#193e32)}

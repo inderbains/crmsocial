@@ -1,0 +1,18 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import path from 'node:path';
+import {fileURLToPath} from 'node:url';
+const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..');
+const read=p=>fs.readFileSync(path.join(root,p),'utf8');
+const dash=read('app/back-office-dashboard.tsx');
+const inbox=read('app/SmartInbox037.tsx');
+const style=read('app/SmartInbox037.module.css');
+test('back office starts at brokerage heading',()=>{assert.match(dash,/BROKERAGE OPERATIONS/);assert.match(dash,/bo-heading/)});
+test('original 20 orange-icon modules remain present',()=>{for(const m of ['Review queue','Changes requested','Approved','Agents & profiles','New agent setup','Plans & monthly fees','Cheque printing','Agent payments','Payroll & salaries','EFT payments','Trust & bank','Bank reconciliation','Reports','Audit & controls','Brokerage Control','Brokerage settings','Office DDF & Listings','Office Meta Accounts','Office Lead Routing','Office Marketing Dashboard'])assert.ok(dash.includes(`name:'${m}'`),m);assert.ok(dash.includes('bo-module-card'))});
+test('accounting reporting compliance retained',()=>{for(const m of ['Accounting','Reporting','Compliance'])assert.ok(dash.includes(`name:'${m}'`),m)});
+test('only one compact office updates panel is rendered',()=>{assert.equal((dash.match(/<SmartInbox037\s/g)||[]).length,1);assert.ok(!dash.includes('Office transaction updates'));assert.ok(!dash.includes('Automatic transaction workflow'));});
+test('automatic transaction workflow remains accessible as a compact tab',()=>{assert.match(dash,/summarizeWorkflow\(merged/);assert.match(dash,/label:'Deal stages'/);assert.match(dash,/workflow-target-deal/);assert.match(inbox,/\|'workflow'/);assert.match(inbox,/x\.progress/)});
+test('office box uses fixed desktop height, mobile stacks naturally',()=>{assert.match(style,/\.officeCard\{height:242px/);assert.match(style,/@media\(max-width:900px\)\{\.officeCard\{height:auto/)});
+test('inbox remains collapsed by default',()=>{assert.match(inbox,/useState<InboxKey\|null>\(null\)/)});
+test('workflow panel is informational and not a financial action',()=>{assert.ok(!dash.includes('post_office_entry'));assert.ok(!dash.includes('authorize_agent_payout'));assert.ok(dash.includes('nextModule'))});

@@ -5,6 +5,7 @@ import type {LucideIcon} from 'lucide-react';
 import {getSupabase} from '../lib/supabase';
 import {brokerageDay} from '../lib/listing-status';
 import {computeOfficeInsights} from '../lib/office-insights.mjs';
+import {summarizeWorkflow} from '../lib/transaction-workflow.mjs';
 import SmartInbox037,{type InboxTab,type InboxItem} from './SmartInbox037';
 import styles from './SmartInbox037.module.css';
 
@@ -17,7 +18,7 @@ type Summary={id:string;address:string;kind:string;display_status:string;next_da
 const dateLabel=(s:string)=>new Date(s+'T12:00:00Z').toLocaleDateString('en-CA',{month:'short',day:'numeric',timeZone:'UTC'});
 const timeLabel=(s:string)=>new Date(s).toLocaleDateString('en-CA',{month:'short',day:'numeric',timeZone:'America/Vancouver'});
 const dateType=(s:Summary)=>s.kind==='Listing'?'Listing expiry':s.display_status==='Accepted offer'?'Subject removal':s.display_status==='Completed'?'Possession':'Completion';
-export default function BackOfficeDashboard({userId,brokerageName,deals,requirements,payouts,accounts,ledger,reconciliations,billingAlerts,onNavigate,onRefresh,refreshing,statementFeatureReady}:Props){
+export default function BackOfficeDashboard({userId,brokerageName,deals,requirements,payouts,accounts,ledger,reconciliations,billingAlerts,onNavigate,onRefresh,refreshing,statementFeatureReady,allocations,matches,closingDeliveries}:Props){
  const db=getSupabase()!;
  // Backwards-compatible with Back Office callers from Fix 036 that omitted userId.
  // Resolve from the authenticated session; RLS still enforces tenant boundaries.
@@ -64,11 +65,27 @@ export default function BackOfficeDashboard({userId,brokerageName,deals,requirem
  const reviewItems:InboxItem[]=reviewList.map(d=>({id:'review-'+d.id,title:'Documents need verification',detail:d.address||'Transaction',onOpen:()=>openDeal(d.id)}));
  const upcomingItems:InboxItem[]=upcoming.map(x=>({id:'date-'+x.id,title:`${dateType(x)} · ${dateLabel(x.next_date!)}`,detail:x.address||'Transaction',onOpen:()=>openDeal(x.id)}));
  const activityItems:InboxItem[]=uniqueNotices.map(n=>({id:'activity-'+n.id,title:n.message,detail:`${merged.find(d=>d.id===n.deal_id)?.address||'Transaction'} · ${timeLabel(n.created_at)}`,unread:!n.read_at,onOpen:()=>void openNotice(n)}));
+ // The previous Automatic Transaction Workflow is retained as an on-demand tab.
+ // It only recommends the next responsible module; it never sends legal emails or releases money.
+ const stages=useMemo(()=>summarizeWorkflow(merged,{today,ledger,payouts,allocations,matches,accounts,deliveries:closingDeliveries,requirements}),
+  [merged,today,ledger,payouts,allocations,matches,accounts,closingDeliveries,requirements]);
+ const openWorkflow=(dealId:string,nextModule:string)=>{
+  try{window.sessionStorage.setItem('realvolt:workflow-target-deal',dealId)}catch{}
+  onNavigate(nextModule==='Transactions'?'Review queue':nextModule||'Review queue');
+ };
+ const stageItems:InboxItem[]=stages.filter(x=>x.status!=='Draft'&&x.percent<100).map(x=>({
+  id:'stage-'+x.dealId,
+  title:`${x.address||'Transaction'} · ${x.stage}`,
+  detail:`${x.percent}% · ${x.owner}: ${x.nextAction}`,
+  progress:x.percent,
+  onOpen:()=>openWorkflow(x.dealId,x.nextModule),
+ }));
  const tabs:InboxTab[]=[
   {key:'new',label:'New files',count:fileItems.length,items:fileItems,empty:'No new files awaiting review.'},
   {key:'review',label:'Review',count:reviewItems.length,items:reviewItems,empty:'No outstanding document reviews.'},
   {key:'upcoming',label:'Upcoming',count:upcomingItems.length,items:upcomingItems,empty:'No important dates coming up.'},
   {key:'activity',label:'Activity',count:activityItems.filter(x=>x.unread).length,items:activityItems,empty:noticeError||'No recent transaction activity.'},
+  {key:'workflow',label:'Deal stages',count:stageItems.length,items:stageItems,empty:'No outstanding transaction stages.'},
  ];
 
  const submitted=merged.filter(d=>d.review_status==='Submitted');
@@ -121,11 +138,11 @@ export default function BackOfficeDashboard({userId,brokerageName,deals,requirem
  };
 
  return <div className="bo-dashboard">
-  <div className="bo-heading"><div><p className="bo-kicker">BROKERAGE OPERATIONS · {brokerageName}</p><h1>Back Office</h1><p>Transactions, agents, accounting and approvals — all in one place.</p></div>
+  <div className="bo-heading"><div><p className="bo-kicker">{brokerageName} · BROKERAGE OPERATIONS</p><h1>Back Office</h1><p>Transactions, agents, accounting and compliance — all in one place.</p></div>
    <button type="button" className="bo-refresh" onClick={()=>{onRefresh();void load()}} disabled={refreshing}><RefreshCw size={17}/> Refresh</button>
   </div>
   <section className={styles.officeCard} aria-label="Office updates">
-   <div className={styles.officeLeft}><p className={styles.eyebrow}>YOUR BROKERAGE AT A GLANCE</p><h2>Office updates</h2><p className={styles.subtle}>Select a category to view details.</p>
+   <div className={styles.officeLeft}><p className={styles.eyebrow}>YOUR BROKERAGE AT A GLANCE</p><h2>Office updates</h2><p className={styles.subtle}>New files, reviews and deal progress — in one place.</p>
     <div className={styles.officePreview}>
      <button type="button" onClick={()=>onNavigate('Review queue')}><b>{submitted.length}</b> Files awaiting review</button>
      <button type="button" onClick={()=>jumpFinance('Compliance')}><b>{requirements.filter(r=>!r.verified&&merged.some(d=>d.id===r.deal_id)).length}</b> Document checks</button>
@@ -134,7 +151,7 @@ export default function BackOfficeDashboard({userId,brokerageName,deals,requirem
    </div>
    <div className={styles.officeRight}><SmartInbox037 tabs={tabs} ariaLabel="Back Office updates"/></div>
   </section>
-  <div className="bo-modules-title"><div><p className="bo-kicker">YOUR BACK OFFICE</p><h2>Applications & tools</h2><p>Original module cards — now including Accounting, Reporting and Compliance.</p></div><span className="bo-count">{totalModules} modules</span></div>
+  <div className="bo-modules-title"><div><p className="bo-kicker">YOUR BACK OFFICE</p><h2>Applications & tools</h2><p>Manage transactions, agents and financial operations.</p></div><span className="bo-count">{totalModules} modules</span></div>
   {groups.map(group=><section className="bo-group" key={group.heading}>
    <div className="bo-group-head"><h3>{group.heading}</h3><p>{group.hint}</p></div>
    <div className="bo-module-grid">{group.modules.map(m=><button key={m.name} type="button" className="bo-module-card" onClick={()=>['Accounting','Reporting','Compliance'].includes(m.name)?jumpFinance(m.name as 'Accounting'|'Reporting'|'Compliance'):onNavigate(m.name)}>

@@ -1,0 +1,9 @@
+RealVolt Fix 040 — targeted Back Office dashboard correction
+
+app/back-office-dashboard.tsx — compact dashboard + original large orange module cards + Deal stages
+app/SmartInbox037.tsx — workflow category and mini progress bars
+app/SmartInbox037.module.css — fixed compact desktop panel height, mobile auto height
+app/Office036.module.css — reference only, unchanged; DO NOT replace existing file
+scripts/apply-realvolt-040.mjs — guarded integrator that removes old office-only top panel
+START_HERE.md — manual GitHub and local installation instructions
+tests/fix-040.test.mjs — structural tests
