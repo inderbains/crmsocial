@@ -1,0 +1,11 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import path from 'node:path';
+const root=path.resolve(import.meta.dirname,'..');
+const read=p=>fs.readFileSync(path.join(root,p),'utf8');
+test('same compact shared inbox is used by agent and office',()=>{assert.match(read('app/personal-dates.tsx'),/SmartInbox037 tabs=\{tabs\}/);assert.match(read('app/back-office-dashboard.tsx'),/SmartInbox037 tabs=\{tabs\}/)});
+test('default inbox is empty until tab is clicked and displays at most 3',()=>{const text=read('app/SmartInbox037.tsx');assert.match(text,/useState<InboxKey\|null>\(null\)/);assert.match(text,/items\.slice\(0,expanded\?25:3\)/);assert.match(text,/t\.count>0/)});
+test('agent queries scope CRM, tasks, contacts and reminders to current user',()=>{const t=read('app/personal-dates.tsx');for(const table of ['agent_personal_dates','crm_tasks','crm_contacts','crm_notes'])assert.match(t,new RegExp(`from\\('${table}'\\)[\\s\\S]{0,130}\\.eq\\('user_id',userId\\)`));assert.match(t,/recipient_id',userId/)});
+test('office reads scoped brokerage data, never unrestricted financial writes',()=>{const t=read('app/back-office-dashboard.tsx');assert.match(t,/\.eq\('brokerage_id',id\)/);assert.match(t,/role!=='admin'/);assert.doesNotMatch(t,/\.from\('office_ledger'\)\.insert/)});
+test('CRM links and transaction links dispatch real navigation events',()=>{const a=read('app/personal-dates.tsx');const b=read('app/back-office-dashboard.tsx');assert.match(a,/realvolt:open-crm-contact/);assert.match(a,/realvolt:open-transaction/);assert.match(b,/realvolt:open-transaction/)});
