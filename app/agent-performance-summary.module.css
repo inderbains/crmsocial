@@ -1,0 +1,15 @@
+.panel{background:#f7f9f4;border:1px solid #d8e4d2;border-radius:16px;padding:20px;margin:16px 0 22px;}
+.header{display:flex;align-items:flex-start;justify-content:space-between;gap:14px;flex-wrap:wrap;margin-bottom:16px;}
+.header h2{font-size:19px;line-height:1.25;letter-spacing:-.3px;margin:3px 0;color:var(--green,#193e32);}
+.kicker{font-size:10px;color:#4a6855;font-weight:800;letter-spacing:1.7px;margin:0;}
+.period{display:flex;gap:3px;padding:3px;border:1px solid #d6e0d1;border-radius:11px;background:#edf1e9;flex-wrap:wrap;}
+.period button{border:0;background:transparent;color:#496253;font-size:12px;font-weight:650;padding:9px 11px;border-radius:8px;cursor:pointer;}
+.period button.active{background:var(--green,#193e32);color:#fff;}
+.metrics{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;}
+.metric{border:1px solid #e0e8dc;background:#fff;border-radius:12px;padding:15px;display:flex;flex-direction:column;min-width:0;gap:8px;}
+.metric span{font-size:12px;color:#5f7264;}
+.metric strong{font-size:clamp(16px,1.8vw,22px);color:var(--green,#193e32);overflow-wrap:anywhere;line-height:1.1;}
+.footnote{color:#687b6c;font-size:12px;line-height:1.6;margin:12px 0 0;}
+.notice{color:#785a22;background:#fff5de;border:1px solid #eedcb4;border-radius:9px;padding:10px 12px;font-size:12px;margin:12px 0 0;}
+@media(max-width:770px){.metrics{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:460px){.metrics{grid-template-columns:1fr 1fr;gap:7px}.metric{padding:11px}.period button{padding:8px 9px}}

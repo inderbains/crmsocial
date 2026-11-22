@@ -1,10 +1,10 @@
-# Manual acceptance scenarios
+# RealVolt Fix 042
 
-1. `crm_contacts` insert through new route is visible in existing `app/crm.tsx`.
-2. CRM profile upsert with auth A succeeds; other auth B can't select or upsert it.
-3. CRM link references only an owned contact and an owned deal; forging another deal id is denied by RLS.
-4. AI endpoint rejects missing token, invalid contact, disabled AI, and opted-out contacts.
-5. Draft creation returns `sent:false`; **no** email or SMS provider is contacted.
-6. Preview client in another brokerage has no cross-tenant access; admin has no automatic access to personal CRM records.
-7. New draft deal is still subject to existing Transactions submission/reviewer approval rules.
-8. Existing Back Office and legacy CRM workflows remain unchanged after migration.
+Read **INSTALL_FIX_042.md** before applying. Do **not** upload the entire archive to GitHub as application source.
+
+- `lib/agent-performance.ts`: typed, read-only firm-sale and commission calculations.
+- `app/agent-performance-summary.tsx`, `.module.css`: compact responsive profile metrics.
+- `scripts/apply-realvolt-042.mjs`: guarded installation against the current repository with `.txt` backups; removes repeated transaction-action call sites.
+- `tests/agent-performance-042.test.mjs`: focused calculations tests, runnable after `npm install`.
+
+No Supabase migration required. Full live build remains unverified.
