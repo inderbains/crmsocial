@@ -56,16 +56,15 @@
 .personalRight .tabs{gap:5px}
 .personalRight .tab{padding:6px 8px;min-height:28px;font-size:10.5px}
 .personalRight .results{height:137px;max-height:137px}
-.quoteDisplay{border:0;background:transparent;padding:2px 4px 4px 0;display:flex;align-items:flex-start;justify-content:space-between;gap:10px;width:100%;max-width:100%;text-align:left;cursor:pointer;color:var(--brand-dark,#193e32);font-size:16px;font-style:italic;font-weight:650;line-height:1.42;min-height:63px}
+.quoteDisplay{border:0;background:transparent;padding:2px 4px 4px 0;display:block;width:100%;max-width:100%;text-align:left;cursor:pointer;color:var(--brand-dark,#193e32);font-size:16px;font-style:italic;font-weight:650;line-height:1.42;min-height:63px}
 .quoteDisplay span:first-child{display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;overflow-wrap:anywhere}
 .quoteDisplay:hover span:first-child{text-decoration:underline;text-decoration-color:#9bb09a;text-underline-offset:3px}
-.editPencil{font-size:15px;flex:none;opacity:.7;font-style:normal}
-.quoteEditor{min-height:63px;display:grid;gap:5px}.quoteEditor textarea{width:100%;font-family:inherit;background:white;border:1px solid #b6cbb3;border-radius:7px;padding:6px;color:#193e32;font-size:12px;resize:vertical;min-height:42px;max-height:80px}
+.quoteEditor{min-height:63px;display:grid;gap:5px}.quoteEditor textarea{width:100%;font-family:inherit;background:transparent;border:0;border-bottom:1px solid #91ac90;border-radius:0;padding:2px 0 4px;color:#193e32;font-size:16px;font-style:italic;font-weight:650;line-height:1.42;resize:none;min-height:52px;max-height:80px;outline:none}.quoteEditor textarea:focus{border-bottom-color:#193e32}
 .srOnly{position:absolute!important;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
 .miniActions,.goalForm{display:flex;gap:7px;align-items:center;flex-wrap:wrap}.miniActions button,.goalForm button{border:1px solid #c0d0bd;background:white;color:#193e32;border-radius:6px;font-size:10px;font-weight:700;padding:5px 9px;cursor:pointer}
 .miniActions .miniPrimary,.goalForm .miniPrimary{background:var(--brand-dark,#193e32);color:white;border-color:var(--brand-dark,#193e32)}
 .goalHeader{display:flex;align-items:center;justify-content:space-between;gap:8px;border-top:1px solid #cbd8c5;padding-top:13px;margin-top:10px;font-size:12px;font-weight:750;color:#193e32}
-.goalEdit{border:0;background:transparent;font-size:14px;color:#526951;cursor:pointer;padding:3px 7px;border-radius:4px}.goalEdit:hover{background:rgba(255,255,255,.7)}
+.goalEdit{border:0;background:transparent;font-size:11px;font-weight:700;text-decoration:underline;text-underline-offset:3px;color:#193e32;cursor:pointer;padding:3px 4px;border-radius:4px}.goalEdit:hover{background:rgba(255,255,255,.7)}
 .goalNumbers{display:flex;gap:8px;align-items:baseline;margin:4px 0 8px;color:#193e32}.goalNumbers strong{font-size:27px;line-height:1.1}.goalNumbers span{font-size:12px;color:#667d6d}
 .goalTrack{height:7px;width:100%;background:#c8d8c2;border-radius:10px;overflow:hidden}.goalFill{background:var(--brand-dark,#193e32);height:100%;border-radius:10px;transition:width .2s}
 .goalMessage{font-size:11px;color:#43604a;margin:8px 0 0}.goalError{font-size:10px;color:#9f3a2c;margin:5px 0 0}

@@ -95,7 +95,7 @@ export default function PersonalDates({userId,notify,brokerageHome=false,brokera
   ]);
   if(p.error){setError('Personal reminders unavailable. Check your existing workspace setup.')}else{setEntries(p.data||[]);setError('')}
   if(!t.error)setDates(t.data||[]);
-  if(!n.error){setNotices(n.data||[]);const ids=[...new Set((n.data||[]).map(x=>x.deal_id))];if(ids.length){const a=await db.from('deal_files').select('id,address').in('id',ids);if(!a.error)setAddresses(Object.fromEntries((a.data||[]).map(x=>[x.id,x.address])))}else setAddresses({})}
+  if(!n.error){setNotices(n.data||[]);const ids=[...new Set((n.data||[]).map((x:{deal_id:string})=>x.deal_id))];if(ids.length){const a=await db.from('deal_files').select('id,address').in('id',ids);if(!a.error)setAddresses(Object.fromEntries((a.data||[]).map((x:{id:string;address:string})=>[x.id,x.address])))}else setAddresses({})}
   if(!task.error)setTasks(task.data||[]);
   if(!client.error)setClients(client.data||[]);
   if(!note.error)setNotes(note.data||[]);
@@ -143,10 +143,10 @@ export default function PersonalDates({userId,notify,brokerageHome=false,brokera
     <p className={styles.eyebrow}>{brokerageHome?'BROKERAGE WORKSPACE':'YOUR PERSONAL WORKSPACE'}</p>
     {quoteEditing?<form className={styles.quoteEditor} onSubmit={e=>void savePref('quote',e)}>
      <label className={styles.srOnly} htmlFor="rv-home-quote">Your quote</label>
-     <textarea id="rv-home-quote" autoFocus value={quoteDraft} maxLength={240} rows={2} onChange={e=>setQuoteDraft(e.target.value)} placeholder="Write a quote…"/>
+     <textarea id="rv-home-quote" autoFocus value={quoteDraft} maxLength={240} rows={2} onChange={e=>setQuoteDraft(e.target.value)} placeholder="Write your quote…" onKeyDown={e=>{if(e.key==='Escape'){e.preventDefault();setQuoteEditing(false)}else if(e.key==='Enter'&&(e.ctrlKey||e.metaKey)){e.preventDefault();e.currentTarget.form?.requestSubmit()}}}/>
      <div className={styles.miniActions}><button className={styles.miniPrimary} disabled={settingsBusy}>Save</button><button type="button" disabled={settingsBusy} onClick={()=>setQuoteEditing(false)}>Cancel</button></div>
-    </form>:<button type="button" className={styles.quoteDisplay} onClick={()=>{setQuoteDraft(quote);setQuoteEditing(true)}} title="Click to edit quote" aria-label="Edit your dashboard quote"><span>“{quote||DEFAULT_QUOTE}”</span><span className={styles.editPencil} aria-hidden="true">✎</span></button>}
-    <div className={styles.goalHeader}><span>{brokerageHome?'Office monthly sales goal':'Monthly sales goal'}</span><button type="button" onClick={()=>{setGoalDraft(String(goal));setGoalEditing(v=>!v)}} className={styles.goalEdit} aria-label="Edit monthly sales goal" title="Edit goal">✎</button></div>
+    </form>:<button type="button" className={styles.quoteDisplay} onClick={()=>{setQuoteDraft(quote);setQuoteEditing(true)}} aria-label="Edit the displayed quote directly"><span>“{quote||DEFAULT_QUOTE}”</span></button>}
+    <div className={styles.goalHeader}><span>{brokerageHome?'Office monthly sales goal':'Monthly sales goal'}</span><button type="button" onClick={()=>{setGoalDraft(String(goal));setGoalEditing(v=>!v)}} className={styles.goalEdit} aria-label="Change monthly sales goal">Change goal</button></div>
     {goalEditing?<form className={styles.goalForm} onSubmit={e=>void savePref('goal',e)}><label htmlFor="rv-goal-input" className={styles.srOnly}>Monthly sales target</label><input id="rv-goal-input" type="number" min="1" max="10000" step="1" value={goalDraft} onChange={e=>setGoalDraft(e.target.value)} required/><button className={styles.miniPrimary} disabled={settingsBusy}>Save</button><button type="button" disabled={settingsBusy} onClick={()=>setGoalEditing(false)}>Cancel</button></form>:<>
      <div className={styles.goalNumbers}><strong>{salesCount}</strong><span>of {goal} firm sales</span></div>
      <div className={styles.goalTrack} role="progressbar" aria-label="Monthly firm sales goal progress" aria-valuenow={salesCount} aria-valuemin={0} aria-valuemax={Math.max(goal,salesCount)}><div className={styles.goalFill} style={{width:`${progressPercent}%`}}/></div>
