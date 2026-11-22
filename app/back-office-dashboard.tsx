@@ -1,13 +1,16 @@
 'use client';
 import {useCallback,useEffect,useMemo,useState} from 'react';
-import {RefreshCw,ShieldCheck,ArrowUpRight} from 'lucide-react';
+import {RefreshCw,ClipboardCheck,FilePenLine,FileCheck2,UserRound,UserRoundPlus,SlidersHorizontal,Printer,WalletCards,CreditCard,Landmark,Scale,ChartNoAxesCombined,ShieldCheck,ClipboardList,Settings2,Database,Megaphone,Route,TrendingUp,ArrowUpRight,FileSpreadsheet} from 'lucide-react';
+import type {LucideIcon} from 'lucide-react';
 import {getSupabase} from '../lib/supabase';
 import {brokerageDay} from '../lib/listing-status';
 import {computeOfficeInsights} from '../lib/office-insights.mjs';
 import SmartInbox037,{type InboxTab,type InboxItem} from './SmartInbox037';
 import styles from './SmartInbox037.module.css';
-import old from './Office036.module.css';
 
+
+type Module={name:string;description:string;icon:LucideIcon;badge?:number};
+type Group={heading:string;hint:string;modules:Module[]};
 type Props={userId?:string;brokerageName:string;deals:any[];requirements:any[];payouts:any[];bills:any[];accounts:any[];ledger:any[];reconciliations:any[];billingAlerts:any[];onNavigate:(view:string)=>void;onRefresh:()=>void;refreshing:boolean;allocations:any[];matches:any[];closingDeliveries:any[];statements:any[];statementFeatureReady:boolean;workflowEvents:any[]};
 type Notice={id:number;deal_id:string;message:string;created_at:string;read_at:string|null};
 type Summary={id:string;address:string;kind:string;display_status:string;next_date:string|null;review_status:string};
@@ -67,23 +70,78 @@ export default function BackOfficeDashboard({userId,brokerageName,deals,requirem
   {key:'upcoming',label:'Upcoming',count:upcomingItems.length,items:upcomingItems,empty:'No important dates coming up.'},
   {key:'activity',label:'Activity',count:activityItems.filter(x=>x.unread).length,items:activityItems,empty:noticeError||'No recent transaction activity.'},
  ];
- const modules=[['Review queue','Agents & profiles','Agent payments','Cheque printing'],['Trust & bank','Bank reconciliation','Financial & compliance','Reports','Audit & controls']];
- return <div className={old.boCompact}>
-  <div className={old.boHeader}><div><p className={old.eyebrow}>BROKERAGE OPERATIONS · {brokerageName}</p><h1>Back Office</h1></div><button type="button" className="btn smallbtn" onClick={()=>{onRefresh();void load()}} disabled={refreshing}><RefreshCw size={15}/> Refresh</button></div>
+
+ const submitted=merged.filter(d=>d.review_status==='Submitted');
+ const changes=merged.filter(d=>d.review_status==='Changes requested');
+ const approved=merged.filter(d=>d.review_status==='Approved');
+ const unpaid=payouts.filter(p=>p.status==='Authorized').length;
+ const pendingDeposits=merged.filter(d=>d.kind==='Sale'&&d.deposit_holder==='our_brokerage'&&Number(d.deposit_amount)>0&&ledger.filter(l=>l.deal_id===d.id&&accounts.some(a=>a.kind==='Trust'&&a.id===l.account_id)).reduce((n,l)=>n+Number(l.amount||0),0)+.01<Number(d.deposit_amount));
+ const pendingRecs=insights.unreconciled;
+  const groups:Group[]=[
+    {heading:'Transactions & Review',hint:'Review incoming files and keep transactions moving.',modules:[
+      {name:'Review queue',description:'Review submitted files, documents and approvals.',icon:ClipboardCheck,badge:submitted.length},
+      {name:'Changes requested',description:'Follow up on files returned to agents for correction.',icon:FilePenLine,badge:changes.length},
+      {name:'Approved',description:'Access approved transaction records and files.',icon:FileCheck2,badge:approved.length},
+    ]},
+    {heading:'Agents & Payments',hint:'Manage people, plans, commissions and payouts.',modules:[
+      {name:'Agents & profiles',description:'Agent contact details, licences, production and records.',icon:UserRound},
+      {name:'New agent setup',description:'Onboard agents, agreements and required documents.',icon:UserRoundPlus},
+      {name:'Plans & monthly fees',description:'Commission splits, recurring fees and deductions.',icon:SlidersHorizontal},
+      {name:'Cheque printing',description:'Print authorized cheques and access cheque registers.',icon:Printer},
+      {name:'Agent payments',description:'Authorize payouts and choose cheque or EFT.',icon:WalletCards,badge:unpaid},
+      {name:'Payroll & salaries',description:'Create and approve staff pay runs, then choose cheque or EFT.',icon:UserRound},
+      {name:'EFT payments',description:'Track agent and salary EFTs and confirm bank settlement.',icon:CreditCard},
+    ]},
+    {heading:'Trust & Accounting',hint:'Track brokerage money, banking and financial controls.',modules:[
+      {name:'Trust & bank',description:'Deposits, releases, accounts and ledger entries.',icon:Landmark,badge:pendingDeposits.length},
+      {name:'Bank reconciliation',description:'Monthly PDF/CSV statements, manual lines, trust checks and broker approval.',icon:Scale,badge:pendingRecs.length},
+      {name:'Reports',description:'Production, commissions and brokerage financial reports.',icon:ChartNoAxesCombined},
+      {name:'Audit & controls',description:'Audit history, exceptions and accounting safeguards.',icon:ShieldCheck,badge:billingAlerts.length},
+    ]},
+    {heading:'Accounting, Reporting & Compliance',hint:'Dedicated financial oversight and regulatory review, alongside your existing trust and accounting tools.',modules:[
+      {name:'Accounting',description:'Trust balances, commission receivables, bank checks and authorized payouts.',icon:Landmark,badge:insights.unreconciled.length},
+      {name:'Reporting',description:'Firm sales, production, commissions, GST estimates and CSV exports.',icon:FileSpreadsheet},
+      {name:'Compliance',description:'Required documents, trust exceptions, reconciliation checks and audit history.',icon:ShieldCheck,badge:requirements.filter(r=>!r.verified&&merged.some(d=>d.id===r.deal_id)).length},
+    ]},
+    {heading:'Brokerage Administration',hint:'Set up and oversee the brokerage workspace.',modules:[
+      {name:'Brokerage Control',description:'Office-wide connections and administration hub.',icon:ClipboardList},
+      {name:'Brokerage settings',description:'Brokerage identity, templates and workspace colours.',icon:Settings2},
+    ]},
+    {heading:'Listings & Marketing',hint:'Office listings, lead distribution and connected campaigns.',modules:[
+      {name:'Office DDF & Listings',description:'Authorized office DDF feed and listing inventory.',icon:Database},
+      {name:'Office Meta Accounts',description:'Connect brokerage Facebook, Instagram and Meta.',icon:Megaphone},
+      {name:'Office Lead Routing',description:'Configure brokerage lead-assignment rules.',icon:Route},
+      {name:'Office Marketing Dashboard',description:'Track office-wide marketing and campaign activity.',icon:TrendingUp},
+    ]},
+  ];
+ const totalModules=groups.reduce((n,g)=>n+g.modules.length,0);
+ const jumpFinance=(tab:'Accounting'|'Reporting'|'Compliance')=>{
+  try {window.sessionStorage.setItem('realvolt:finance-selected-tab',tab)} catch {}
+  onNavigate('Financial & compliance');
+ };
+
+ return <div className="bo-dashboard">
+  <div className="bo-heading"><div><p className="bo-kicker">BROKERAGE OPERATIONS · {brokerageName}</p><h1>Back Office</h1><p>Transactions, agents, accounting and approvals — all in one place.</p></div>
+   <button type="button" className="bo-refresh" onClick={()=>{onRefresh();void load()}} disabled={refreshing}><RefreshCw size={17}/> Refresh</button>
+  </div>
   <section className={styles.officeCard} aria-label="Office updates">
-   <div className={styles.officeLeft}><p className={styles.eyebrow}>YOUR OFFICE AT A GLANCE</p><h2>Office updates</h2><p className={styles.subtle}>One place for new files and important updates.</p>
+   <div className={styles.officeLeft}><p className={styles.eyebrow}>YOUR BROKERAGE AT A GLANCE</p><h2>Office updates</h2><p className={styles.subtle}>Select a category to view details.</p>
     <div className={styles.officePreview}>
-     <button type="button" onClick={()=>onNavigate('Review queue')}><b>{submissions.length}</b> Files awaiting approval</button>
-     <button type="button" onClick={()=>onNavigate('Financial & compliance')}><b>{insights.unreconciled.length}</b> Reconciliations to check</button>
-     <button type="button" onClick={()=>onNavigate('Agent payments')}><b>{insights.authorized.length}</b> Agent payments pending</button>
+     <button type="button" onClick={()=>onNavigate('Review queue')}><b>{submitted.length}</b> Files awaiting review</button>
+     <button type="button" onClick={()=>jumpFinance('Compliance')}><b>{requirements.filter(r=>!r.verified&&merged.some(d=>d.id===r.deal_id)).length}</b> Document checks</button>
+     <button type="button" onClick={()=>jumpFinance('Accounting')}><b>{insights.unreconciled.length}</b> Reconciliations to check</button>
     </div>
    </div>
-   <div className={styles.officeRight}><SmartInbox037 tabs={tabs} ariaLabel="Back Office notification inbox"/></div>
+   <div className={styles.officeRight}><SmartInbox037 tabs={tabs} ariaLabel="Back Office updates"/></div>
   </section>
-  <section className={old.boPanel} aria-label="Accounting and compliance overview"><h3><ShieldCheck size={17} style={{verticalAlign:'middle',marginRight:7}}/>Accounting, reporting & compliance</h3><p className={old.boTiny}>Trust accounts: {accounts.filter(a=>a.kind==='Trust'&&a.active!==false).length} · Outstanding reconciliations: {insights.unreconciled.length} · Unverified document requirements: {requirements.filter(r=>r.verified!==true&&merged.some(d=>d.id===r.deal_id)).length} · Monthly statements: {statementFeatureReady?'Enabled':'Setup required'}</p><button type="button" className="btn smallbtn" onClick={()=>onNavigate('Financial & compliance')}>Open financial & compliance centre <ArrowUpRight size={14}/></button></section>
-  <h2 className={old.boSectionHeading}>Applications & tools</h2>
-  <div className={old.boMiniModules}>{modules.flat().map(m=><button type="button" key={m} onClick={()=>onNavigate(m)}>{m}</button>)}</div>
-  <details><summary className={old.boTiny} style={{cursor:'pointer'}}>More brokerage tools</summary><div className={old.boMiniModules} style={{marginTop:10}}>{['Changes requested','Approved','New agent setup','Plans & monthly fees','Payroll & salaries','EFT payments','Brokerage settings','Brokerage Control','Office DDF & Listings','Office Meta Accounts','Office Lead Routing','Office Marketing Dashboard'].map(m=><button type="button" key={m} onClick={()=>onNavigate(m)}>{m}</button>)}</div></details>
-  <p className={old.boTiny}>Financial summaries are read-only. Trust releases and agent payments require the existing authorization workflow.</p>
+  <div className="bo-modules-title"><div><p className="bo-kicker">YOUR BACK OFFICE</p><h2>Applications & tools</h2><p>Original module cards — now including Accounting, Reporting and Compliance.</p></div><span className="bo-count">{totalModules} modules</span></div>
+  {groups.map(group=><section className="bo-group" key={group.heading}>
+   <div className="bo-group-head"><h3>{group.heading}</h3><p>{group.hint}</p></div>
+   <div className="bo-module-grid">{group.modules.map(m=><button key={m.name} type="button" className="bo-module-card" onClick={()=>['Accounting','Reporting','Compliance'].includes(m.name)?jumpFinance(m.name as 'Accounting'|'Reporting'|'Compliance'):onNavigate(m.name)}>
+    <span className="bo-module-top"><span className="bo-module-icon"><m.icon size={24}/></span>{!!m.badge&&<span className="bo-module-badge">{m.badge} items</span>}</span>
+    <strong>{m.name}</strong><span className="bo-module-description">{m.description}</span><span className="bo-module-open">Open module <ArrowUpRight size={16}/></span>
+   </button>)}</div>
+  </section>)}
+  <p className="bo-footnote">Financial dashboards are informational. Trust transfers, commission releases and agent payments require separate approval and reconciliation controls.</p>
  </div>;
 }

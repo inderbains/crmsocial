@@ -1,5 +1,5 @@
 'use client';
-import {useMemo,useState} from 'react';
+import {useEffect,useMemo,useState} from 'react';
 import {Landmark, FileSpreadsheet, ShieldCheck, WalletCards, ClipboardCheck, ArrowUpRight, AlertTriangle, Download, CircleCheck, CalendarDays} from 'lucide-react';
 import {brokerageDay} from '../lib/listing-status';
 import {computeOfficeInsights,firmDate,brokerageSideCommission,csvRows} from '../lib/office-insights.mjs';
@@ -20,6 +20,13 @@ const exportCSV=(filename:string,rows:unknown[][])=>{
 export default function OfficeFinancialCompliance({brokerageName,deals,accounts,ledger,reconciliations,requirements,payouts,audits,statements,billingAlerts,onNavigate}:Props){
  const prevMonth=(()=>{const v=new Date(today().slice(0,7)+'-01T12:00:00Z');v.setUTCDate(0);return v.toISOString().slice(0,7)})();
  const [tab,setTab]=useState<'Accounting'|'Reporting'|'Compliance'>('Accounting');
+ useEffect(()=>{
+  try {
+   const next=window.sessionStorage.getItem('realvolt:finance-selected-tab');
+   if(next==='Accounting'||next==='Reporting'||next==='Compliance')setTab(next);
+   window.sessionStorage.removeItem('realvolt:finance-selected-tab');
+  } catch {}
+ },[]);
  const [period,setPeriod]=useState(today().slice(0,7));
  const d=useMemo(()=>computeOfficeInsights({deals,accounts,ledger,reconciliations,requirements,payouts,reconciliationMonth:prevMonth},period),[deals,accounts,ledger,reconciliations,requirements,payouts,period,prevMonth]);
  const currentBrokerageIDs=new Set(deals.map(x=>x.id));

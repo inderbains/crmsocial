@@ -1,57 +1,52 @@
-# RealVolt 038 — Consolidated dashboard + financial operations upgrade
+# RealVolt Fix 039 — Restore original Back Office cards
 
-**Updated after the 034/035 transaction testing and the 036/037 dashboard iterations.**
+**What this fixes:** Fix 038 replaced your full-size orange-icon Back Office module cards with small text links. Fix 039 restores the original full-size cards and original group structure, keeps only one compact office-updates panel, and exposes separate **Accounting**, **Reporting**, and **Compliance** cards. It preserves the existing Trust & bank, Bank reconciliation, Reports, Audit & controls, commissions, payouts, e-signing and other Back Office modules.
 
-This is a **merge package**, not a complete replacement of the latest live GitHub repository. It was tested against the latest source archives available in this chat and both previous 036→037 installation sequences. We cannot access the current GitHub `main` source directly; the installer is deliberately guarded against overwriting unknown newer edits.
+## Important: this is a targeted update, not a complete source repository
 
-## What this fixes now
+The actual newest `crmsocial` GitHub checkout was not available. The installer was tested against the recovered reference archive and a synthetic Fix 038-style project. **Do not overwrite the entire GitHub repository with this ZIP.**
 
-**Agent dashboard:** same compact pale-green box; personal dates on the left; Reminders / Upcoming / Activity / Clients on the right, with unread/count badges, empty panel by default, and clickable CRM/transaction records. Up to 3 items per selected tab initially.
+## Installation using a computer
 
-**Back Office dashboard:** one compact Office Updates panel; New Files / Review / Upcoming / Activity; brokerage-scoped queries, deep links to exact transaction, counts and background refresh. Removes the redundant full-size Office Transaction Updates section. Other modules remain accessible below.
+1. Download a fresh ZIP from `https://github.com/inderbains/crmsocial` using **Code → Download ZIP**. Extract it on your computer. Back it up.
+2. Extract Fix 039 to a different folder.
+3. With Node.js installed, run:
 
-**Accounting / Reporting / Compliance:** dedicated Back Office `Financial & compliance` route, including read-only trust book balances, deal liability comparisons, reconciling exceptions, earned/completed commission receivables (distinct from payouts), authorized vs paid agent payouts, firm-sale monthly sales/volume/expected commission, indicative GST, CSV registers, missing documents, lawyer completion-letter checks and audit summaries. Financial posting and payment authorization stay in the existing Trust & bank / Agent payments / Bank reconciliation modules.
+```bash
+node path/to/RealVolt039/scripts/apply-realvolt-039.mjs path/to/crmsocial-main
+```
 
-**Transaction actions:** only one action selector should be rendered per transaction detail. The installation script checks the current transactions source for repeated `<TransactionActions>` markup. If it finds duplicates, it stops rather than deleting unpredictable live code. A separate current-source repair would then be needed.
+4. The script checks for the original `bo-module-card` CSS and the known Back Office integration points. It removes the duplicate standalone Office transaction updates, ensures the parent financial route exists, and adds/updates only the necessary components. Existing files are copied to a temporary backup folder.
+5. Compare changes before committing. Run `npm run build` in the current repository. Do not deploy if it fails.
+6. Once the build succeeds, commit the changed project files to GitHub and let Hostinger deploy.
 
-**Previous Hostinger build errors:** Back Office `userId` is integrated; example folders (`reference-only`, `edge-editor`, old backup folders) are excluded from Next.js type checking. These example folders are not packaged as active source.
+### Browser-only GitHub editing
 
-## How to install safely
+You cannot safely upload the ZIP wholesale through GitHub. The two application components can be uploaded to `app/`, but the `app/back-office.tsx` parent also needs a guarded merge to remove the duplicate notice card and support the Financial & compliance route. The correct merge depends on your newest source. If you work only from GitHub's website, share your latest `crmsocial` ZIP so exact replacement files can be prepared.
 
-1. Back up the live Supabase database and download a **fresh** ZIP of the current `github.com/inderbains/crmsocial` repository (branch `main`). Work on this fresh local copy, not a November 20 source snapshot.
-2. Extract this package **outside** the repository.
-3. In a terminal with Node.js 22+, run:
+## What's restored
 
-   ```bash
-   node /path/to/RealVolt_038/scripts/apply-realvolt-038.mjs /path/to/crmsocial
-   ```
+- One compact office inbox near the top (New files, Review, Upcoming, Activity), showing content only after a button is clicked.
+- Original full-size orange-icon grid cards in these groups: Transactions & Review, Agents & Payments, Trust & Accounting, Brokerage Administration, Listings & Marketing.
+- Three new cards using the same visual design: Accounting, Reporting, Compliance. These open the relevant tabs of the existing financial oversight panel.
+- All previously available financial operations still occur in their existing modules. This panel is read-only; it does not release trust money or automate compliance approvals.
 
-   On Windows, use quoted full paths, e.g. `node "C:\\Downloads\\RealVolt_038\\scripts\\apply-realvolt-038.mjs" "C:\\Downloads\\crmsocial-main"`.
-4. The installer preflights the parent integration points **before writing**; it makes backups in the operating-system temp directory, outside the GitHub project. If it stops because your live source differs, **do not force the changes**. Provide a ZIP of your latest GitHub repository for a source-specific merge.
-5. In the project folder run:
+## No database changes
 
-   ```bash
-   npm install
-   node --test tests/office-insights-038.test.mjs
-   npm run build
-   ```
+No Supabase SQL is needed for this UI patch. If SQL 034/035 isn't installed or user access policies differ, the notification and finance screens still require the right backend setup.
 
-6. Review the changed files, commit and deploy first to a staging environment. Confirm the actual Hostinger build succeeds before going live.
-7. Test using an **agent** and a different **brokerage admin**, and test two isolated brokerages before enrolling paying customers.
+## Verification
 
-### Do not upload this entire ZIP into GitHub
+- `node --test tests/fix-039.test.mjs` — 10 targeted structural/financial checks passed.
+- TypeScript TSX syntax transpilation succeeded for the touched components.
+- Guarded merge script tested against both an older reference project and a Fix 038-style copy.
+- **Not verified:** the latest Hostinger production build, live Supabase integration, or browser clicks against the user's current branch.
 
-Only `github-files/app/*`, `github-files/lib/*`, and `github-files/tests/*` belong in the corresponding project folders **after** the parent merges are applied. Uploading those components alone is insufficient for the new Financial & compliance route and CRM deep links. The merge script also changes `app/back-office.tsx`, `app/realvolt-workspace.tsx`, `app/crm.tsx` and `tsconfig.json` safely.
+### Visual check after installation
 
-`supabase-source/` contains Edge Function code **for separate Supabase deployment**, not a new database migration and not a Next.js upload. Existing 034 + 035 database migrations are assumed installed. **Do not re-run them.** The `closing-packet` function must be deployed with its `_shared` modules through the Supabase CLI; until then, PDF previews and email delivery are not verified.
-
-## Scope and limitations
-
-- This is a code update to **existing** 034/035 transaction workflows, not a replacement of all transaction SQL or accounting controls. Listing → accepted offer → signed subject removal → firm sold → legal completion → commission receipt → payout remains provided by the prior database and application code.
-- Firm sales count at `rv_firm_date` **once**, not on completion. Payouts still require legal completion, verified funds and the established approval process.
-- Agent split, unpaid fees and GST on payouts use the **existing** functions and agent compensation plans. This patch does not authorize or automatically issue bank payments.
-- Summary balances are not bank-provided balances or an official regulatory accounting return. Managing-broker review and independent verification are still required.
-- No new Supabase SQL 038 is necessary. Edge Function deployment is separate.
-- We could run twelve focused unit/integration-source tests and TypeScript syntax transpilation, but **could not run a full `npm run build` against the inaccessible live GitHub commit**. Run it on the live checkout as above.
-
-See `docs/FEATURE_MATRIX.md` and `docs/TEST_CHECKLIST.md` for exactly what is included versus what still requires live verification.
+1. Back Office contains only one compact green updates panel; no additional huge Office Transaction Updates section above it.
+2. Below that, large three-column original orange-icon module cards appear (not tiny text buttons).
+3. Accounting, Reporting and Compliance cards navigate to the appropriate financial tab.
+4. Existing Reports, Trust & bank, Bank reconciliation, Cheque printing, Agent payments, Audit & controls and other modules remain accessible.
+5. New file and review inbox items navigate to the relevant transaction folder.
+6. Agent dashboard remains unchanged by this patch.
