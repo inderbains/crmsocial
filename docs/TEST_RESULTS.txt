@@ -1,0 +1,91 @@
+TAP version 13
+# Subtest: accepted offer is not a leaderboard sale
+ok 1 - accepted offer is not a leaderboard sale
+  ---
+  duration_ms: 0.781988
+  type: 'test'
+  ...
+# Subtest: sale counted once when firm, not again at completion
+ok 2 - sale counted once when firm, not again at completion
+  ---
+  duration_ms: 0.822197
+  type: 'test'
+  ...
+# Subtest: gross commissions remain separate from payouts and expected receipts
+ok 3 - gross commissions remain separate from payouts and expected receipts
+  ---
+  duration_ms: 0.17054
+  type: 'test'
+  ...
+# Subtest: trust reconciliation exceptions use recorded ledger and period
+ok 4 - trust reconciliation exceptions use recorded ledger and period
+  ---
+  duration_ms: 0.230549
+  type: 'test'
+  ...
+# Subtest: CSV export protects against formula injection
+ok 5 - CSV export protects against formula injection
+  ---
+  duration_ms: 0.249366
+  type: 'test'
+  ...
+# Subtest: compact agent panel defaults to no selected notification tab
+ok 6 - compact agent panel defaults to no selected notification tab
+  ---
+  duration_ms: 0.213173
+  type: 'test'
+  ...
+# Subtest: agent and office use the same compact inbox
+ok 7 - agent and office use the same compact inbox
+  ---
+  duration_ms: 0.166244
+  type: 'test'
+  ...
+# Subtest: office notification lookup is session user aware
+ok 8 - office notification lookup is session user aware
+  ---
+  duration_ms: 0.234414
+  type: 'test'
+  ...
+# Subtest: accounting, reporting and compliance exist with audit and exports
+ok 9 - accounting, reporting and compliance exist with audit and exports
+  ---
+  duration_ms: 1.725744
+  type: 'test'
+  ...
+# Subtest: only one transaction action selector renders in the transaction detail
+ok 10 - only one transaction action selector renders in the transaction detail
+  ---
+  duration_ms: 0.651376
+  type: 'test'
+  ...
+# Subtest: parent dashboard does not include the duplicate legacy updates section
+ok 11 - parent dashboard does not include the duplicate legacy updates section
+  ---
+  duration_ms: 0.583386
+  type: 'test'
+  ...
+# Subtest: CRM client and transaction notifications have working workspace listeners
+ok 12 - CRM client and transaction notifications have working workspace listeners
+  ---
+  duration_ms: 0.25228
+  type: 'test'
+  ...
+1..12
+# tests 12
+# suites 0
+# pass 12
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 75.850818
+app/back-office.tsx PASS (syntax)
+app/realvolt-workspace.tsx PASS (syntax)
+app/crm.tsx PASS (syntax)
+app/back-office-dashboard.tsx PASS (syntax)
+app/personal-dates.tsx PASS (syntax)
+app/office-financial-compliance.tsx PASS (syntax)
+app/SmartInbox037.tsx PASS (syntax)
+app/transaction-actions.tsx PASS (syntax)
+app/transactions.tsx PASS (syntax)

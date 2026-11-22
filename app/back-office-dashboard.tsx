@@ -8,7 +8,7 @@ import SmartInbox037,{type InboxTab,type InboxItem} from './SmartInbox037';
 import styles from './SmartInbox037.module.css';
 import old from './Office036.module.css';
 
-type Props={userId:string;brokerageName:string;deals:any[];requirements:any[];payouts:any[];bills:any[];accounts:any[];ledger:any[];reconciliations:any[];billingAlerts:any[];onNavigate:(view:string)=>void;onRefresh:()=>void;refreshing:boolean;allocations:any[];matches:any[];closingDeliveries:any[];statements:any[];statementFeatureReady:boolean;workflowEvents:any[]};
+type Props={userId?:string;brokerageName:string;deals:any[];requirements:any[];payouts:any[];bills:any[];accounts:any[];ledger:any[];reconciliations:any[];billingAlerts:any[];onNavigate:(view:string)=>void;onRefresh:()=>void;refreshing:boolean;allocations:any[];matches:any[];closingDeliveries:any[];statements:any[];statementFeatureReady:boolean;workflowEvents:any[]};
 type Notice={id:number;deal_id:string;message:string;created_at:string;read_at:string|null};
 type Summary={id:string;address:string;kind:string;display_status:string;next_date:string|null;review_status:string};
 const dateLabel=(s:string)=>new Date(s+'T12:00:00Z').toLocaleDateString('en-CA',{month:'short',day:'numeric',timeZone:'UTC'});
@@ -16,15 +16,20 @@ const timeLabel=(s:string)=>new Date(s).toLocaleDateString('en-CA',{month:'short
 const dateType=(s:Summary)=>s.kind==='Listing'?'Listing expiry':s.display_status==='Accepted offer'?'Subject removal':s.display_status==='Completed'?'Possession':'Completion';
 export default function BackOfficeDashboard({userId,brokerageName,deals,requirements,payouts,accounts,ledger,reconciliations,billingAlerts,onNavigate,onRefresh,refreshing,statementFeatureReady}:Props){
  const db=getSupabase()!;
+ // Backwards-compatible with Back Office callers from Fix 036 that omitted userId.
+ // Resolve from the authenticated session; RLS still enforces tenant boundaries.
+ const [sessionUserId,setSessionUserId]=useState(userId||'');
+ useEffect(()=>{if(userId){setSessionUserId(userId);return}let alive=true;void db.auth.getUser().then(({data})=>{if(alive)setSessionUserId(data.user?.id||'')});return()=>{alive=false}},[db,userId]);
  const [notices,setNotices]=useState<Notice[]>([]),[liveDeals,setLiveDeals]=useState<any[]>([]),[summary,setSummary]=useState<Summary[]>([]),[brokerageId,setBrokerageId]=useState<string>(''),[noticeError,setNoticeError]=useState('');
  const today=brokerageDay();
  const lastMonth=useMemo(()=>{const d=new Date(today.slice(0,7)+'-01T12:00:00Z');d.setUTCDate(0);return d.toISOString().slice(0,7)},[today]);
  const load=useCallback(async()=>{
-  const member=await db.from('brokerage_members').select('brokerage_id,role').eq('user_id',userId).maybeSingle();
+  if(!sessionUserId)return;
+  const member=await db.from('brokerage_members').select('brokerage_id,role').eq('user_id',sessionUserId).maybeSingle();
   if(member.error||member.data?.role!=='admin'||!member.data?.brokerage_id){setNoticeError('Office inbox requires a verified brokerage administrator.');return}
   const id=member.data.brokerage_id;setBrokerageId(id);
   const [n,d,s]=await Promise.all([
-   db.from('rv_transaction_notifications').select('id,deal_id,message,created_at,read_at').eq('recipient_id',userId).order('created_at',{ascending:false}).limit(100),
+   db.from('rv_transaction_notifications').select('id,deal_id,message,created_at,read_at').eq('recipient_id',sessionUserId).order('created_at',{ascending:false}).limit(100),
    db.from('deal_files').select('id,address,kind,review_status,rv_stage,subject_date,completion_date,created_at,updated_at,brokerage_id').eq('brokerage_id',id).order('created_at',{ascending:false}).limit(300),
    db.from('rv_tx_summary').select('id,address,kind,display_status,next_date,review_status').eq('brokerage_id',id).not('next_date','is',null).order('next_date').limit(80),
   ]);
@@ -32,13 +37,13 @@ export default function BackOfficeDashboard({userId,brokerageName,deals,requirem
   if(!d.error)setLiveDeals(d.data||[]);
   if(!s.error)setSummary(s.data||[]);
   setNoticeError(n.error?'Office notifications unavailable.':'');
- },[db,userId]);
+ },[db,sessionUserId]);
  useEffect(()=>{void load();const tick=setInterval(()=>void load(),15000);const focus=()=>void load();window.addEventListener('focus',focus);return()=>{clearInterval(tick);window.removeEventListener('focus',focus)}},[load]);
  useEffect(()=>{if(!brokerageId)return;
-  const noticeSub=db.channel(`rv037-office-inbox-${userId}`).on('postgres_changes',{event:'*',schema:'public',table:'rv_transaction_notifications',filter:`recipient_id=eq.${userId}`},()=>void load()).subscribe();
+  const noticeSub=db.channel(`rv037-office-inbox-${sessionUserId}`).on('postgres_changes',{event:'*',schema:'public',table:'rv_transaction_notifications',filter:`recipient_id=eq.${sessionUserId}`},()=>void load()).subscribe();
   const dealSub=db.channel(`rv037-office-deals-${brokerageId}`).on('postgres_changes',{event:'*',schema:'public',table:'deal_files',filter:`brokerage_id=eq.${brokerageId}`},()=>void load()).subscribe();
   return()=>{void db.removeChannel(noticeSub);void db.removeChannel(dealSub)};
- },[db,userId,brokerageId,load]);
+ },[db,sessionUserId,brokerageId,load]);
  const merged=useMemo(()=>{const map=new Map(deals.map(d=>[d.id,d]));for(const live of liveDeals)map.set(live.id,{...map.get(live.id),...live});return [...map.values()]},[deals,liveDeals]);
  const previousMonth=lastMonth;
  const insights=useMemo(()=>computeOfficeInsights({deals:merged,payouts,accounts,ledger,reconciliations,requirements,reconciliationMonth:previousMonth},today.slice(0,7)),[merged,payouts,accounts,ledger,reconciliations,requirements,previousMonth,today]);
@@ -51,7 +56,7 @@ export default function BackOfficeDashboard({userId,brokerageName,deals,requirem
  const upcoming=summary.filter(d=>d.next_date&&d.next_date>=today&&d.review_status!=='Draft');
  const uniqueNotices=notices.filter((x,i,arr)=>arr.findIndex(a=>a.deal_id===x.deal_id&&a.message===x.message)===i);
  const openDeal=(id:string)=>window.dispatchEvent(new CustomEvent('realvolt:open-transaction',{detail:{id,office:true}}));
- async function openNotice(n:Notice){if(!n.read_at){const r=await db.from('rv_transaction_notifications').update({read_at:new Date().toISOString()}).eq('id',n.id).eq('recipient_id',userId);if(!r.error)setNotices(a=>a.map(x=>x.id===n.id?{...x,read_at:new Date().toISOString()}:x))}openDeal(n.deal_id)}
+ async function openNotice(n:Notice){if(!n.read_at){const r=await db.from('rv_transaction_notifications').update({read_at:new Date().toISOString()}).eq('id',n.id).eq('recipient_id',sessionUserId);if(!r.error)setNotices(a=>a.map(x=>x.id===n.id?{...x,read_at:new Date().toISOString()}:x))}openDeal(n.deal_id)}
  const fileItems:InboxItem[]=freshSubmissions.map(d=>({id:'submitted-'+d.id,title:`${d.kind==='Sale'?'Sale':'Listing'} submitted`,detail:d.address||'Transaction',unread:true,onOpen:()=>openDeal(d.id)}));
  const reviewItems:InboxItem[]=reviewList.map(d=>({id:'review-'+d.id,title:'Documents need verification',detail:d.address||'Transaction',onOpen:()=>openDeal(d.id)}));
  const upcomingItems:InboxItem[]=upcoming.map(x=>({id:'date-'+x.id,title:`${dateType(x)} · ${dateLabel(x.next_date!)}`,detail:x.address||'Transaction',onOpen:()=>openDeal(x.id)}));
