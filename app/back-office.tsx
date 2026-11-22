@@ -40,7 +40,7 @@ export default function BackOffice({userId,view,notify,initialAgentUserId,onNavi
  const shownAgents=agents.filter(p=>(!agentFilter||p.id===agentFilter)&&(p.full_name+' '+p.email+' '+p.license_number).toLowerCase().includes(agentSearch.toLowerCase()));
  const currentProfile=agents.find(p=>p.id===profileId);
  if(currentProfile&&!editing)return <OfficeAgentProfile key={currentProfile.id} agent={currentProfile} brokerage={brokerage} userId={userId} deals={deals} bills={bills} payouts={payouts} allocations={allocations} charges={charges} audits={audits} notify={notify} onClose={()=>setProfileId('')} onEdit={()=>setEditing({...currentProfile})}/>;
- if(view==='Dashboard')return <><section className="panel personal-dates-card"><TransactionUpdates userId={userId} office/></section><BackOfficeDashboard
+ if(view==='Dashboard')return <><BackOfficeDashboard
   userId={userId}
   brokerageName={brokerage.name} deals={deals} requirements={requirements} payouts={payouts} bills={bills} accounts={accounts} ledger={ledger} reconciliations={recs} billingAlerts={billingAlerts} allocations={allocations} matches={matches} closingDeliveries={closingDeliveries} statements={statements} statementFeatureReady={statementFeatureReady} workflowEvents={workflowEvents} onNavigate={onNavigate||(()=>{})} onRefresh={()=>void load()} refreshing={loading||busy}/>{error&&<div className="notice">{error}</div>}</>;
 
