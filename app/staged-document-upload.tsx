@@ -1,4 +1,35 @@
-'Brokerage completion confirmation (PDF)':'Brokerage Completion Confirmation PDF',
+'use client';
+import {useCallback,useEffect,useMemo,useState,type ChangeEvent} from 'react';
+import {getSupabase} from '../lib/supabase';
+import styles from './staged-document-upload.module.css';
+
+type Phase='listing'|'offer'|'firm'|'completion';
+type Deal={id:string;kind:string;representation?:string;rv_stage?:string|null;review_status:string;brokerage_id?:string|null;user_id:string};
+type Document={id:string;name:string;path:string};
+type Template={id:string;label:string;phase:Phase;required:boolean;sort_order:number;representation:string};
+type Requirement={id:string;label:string;rv_phase:string;document_id:string|null;verified:boolean;rv_waived?:boolean;rv_required?:boolean};
+type UploadState={key:string;progress:boolean};
+const maxBytes=20*1024*1024;
+const allowedExtensions=/\.(pdf|png|jpg|jpeg|doc|docx|xls|xlsx|txt)$/i;
+const phases:Phase[]=['listing','offer','firm','completion'];
+const headings:Record<Phase,string>={listing:'New listing documents',offer:'Accepted offer documents',firm:'Subject removal & firm sale',completion:'Completion & closing documents'};
+const friendlyNames:Record<string,string>={
+ 'Signed listing contract':'Multiple Listing Contract (signed)',
+ 'MLS listing sheet / listing details':'MLS Listing Sheet / Listing Details',
+ 'Disclosure (listing)':'Disclosure / Representation',
+ 'FINTRAC identity verification':'FINTRAC ID verification',
+ 'Listing addendum (if applicable)':'Listing addendum',
+ 'Signed purchase and sale contract':'Contract of Purchase and Sale (CPS)',
+ 'Commission disclosure':'Commission Disclosure',
+ 'Disclosure of services / representation':'Disclosure of Services / Representation',
+ 'FINTRAC identity verification — buyer(s)':'Buyer FINTRAC ID verification',
+ 'Contract addendum (if applicable)':'Contract addendum',
+ 'Signed subject removal / unconditional contract':'Signed Subject Removal / Unconditional Contract',
+ 'Trade record sheet':'Trade Record Sheet',
+ 'Sale report form':'Sale Report Form',
+ 'Deposit cheque copy / deposit receipt':'Deposit Cheque Copy / Receipt',
+ 'Subject extension or other addendum (if applicable)':'Subject Extension / Additional Addendum',
+ 'Lawyer completion letter':'Lawyer Completion Confirmation','Brokerage completion confirmation (PDF)':'Brokerage Completion Confirmation PDF',
  'Commission Instruction Report — CIR (PDF)':'Commission Instruction Report (CIR)',
  'Internal commission payable statement (PDF)':'Internal Commission Payable PDF',
 };
