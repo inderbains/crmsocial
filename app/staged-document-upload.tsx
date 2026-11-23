@@ -23,7 +23,6 @@ const friendlyNames:Record<string,string>={
  'Commission disclosure':'Commission Disclosure',
  'Disclosure of services / representation':'Disclosure of Services / Representation',
  'FINTRAC identity verification — buyer(s)':'Buyer FINTRAC ID verification',
- 'FINTRAC identity verification — seller(s)':'Seller FINTRAC ID verification',
  'Contract addendum (if applicable)':'Contract addendum',
  'Signed subject removal / unconditional contract':'Signed Subject Removal / Unconditional Contract',
  'Title search':'Title Search',
@@ -39,7 +38,6 @@ const friendlyNames:Record<string,string>={
  'Closing addendum (if applicable)':'Closing Addendum / Additional Documents',
 };
 const isAddendum=(label:string)=>/addendum|extension/i.test(label);
-const isIdentity=(label:string)=>/FINTRAC identity verification/i.test(label);
 
 export default function StagedDocumentUpload({deal,docs,office,displayStatus,onSaved,onReadyChange,notify}:{
  deal:Deal;docs:Document[];office:boolean;displayStatus?:string;onSaved:()=>Promise<void>;onReadyChange?:(ready:boolean)=>void;notify:(message:string)=>void;
@@ -101,12 +99,10 @@ export default function StagedDocumentUpload({deal,docs,office,displayStatus,onS
     if(stored.error)throw new Error('Storage upload failed: '+stored.error.message);
     const saved=await db.from('deal_documents').insert({deal_id:deal.id,path,name:file.name}).select('id').single();
     if(saved.error)throw new Error('Document uploaded but registration failed: '+saved.error.message);
-    const linked=extra&&isIdentity(t.label)
-     ?await db.rpc('rv055_link_extra_identity_doc',{p_deal:deal.id,p_document:saved.data.id,p_template_label:t.label})
-     :await db.rpc('rv_link_uploaded_compliance_doc',{p_deal:deal.id,p_document:saved.data.id,p_template_label:t.label,p_additional:extra&&isAddendum(t.label)});
+    const linked=await db.rpc('rv_link_uploaded_compliance_doc',{p_deal:deal.id,p_document:saved.data.id,p_template_label:t.label,p_additional:extra&&isAddendum(t.label)});
     if(linked.error)throw new Error('Document saved, but checklist linking failed: '+linked.error.message);
     uploadedCount++;
-    extra=isAddendum(t.label)||isIdentity(t.label);
+    extra=isAddendum(t.label);
    }
    setRefresh(v=>v+1);await onSaved();notify(uploadedCount+' document'+(uploadedCount===1?'':'s')+' attached to '+(friendlyNames[t.label]||t.label));
   }catch(e){notify((e as Error).message);setRefresh(v=>v+1);await onSaved().catch(()=>{})}
@@ -132,8 +128,8 @@ export default function StagedDocumentUpload({deal,docs,office,displayStatus,onS
      <div className={styles.itemLabel}><strong>{friendlyNames[t.label]||t.label}</strong><span className={t.required?styles.required:styles.optional}>{t.required?'Required':'Optional'}</span></div>
      <div className={styles.itemStatus}>{verified?'Verified by Back Office':waived?'Marked not applicable':f?`Uploaded: ${f.name} · Awaiting verification`:'Not uploaded'}{added.length>0?` · ${added.length} additional attachment(s)`:''}</div>
      <label className={`${styles.upload} ${disabled?styles.disabled:''}`}>
-      {uploading?.key===t.id?'Uploading…':isAddendum(t.label)||isIdentity(t.label)?'＋ Add document(s)':f?'Replace uploaded file':'Choose file'}
-      <input aria-label={'Upload '+(friendlyNames[t.label]||t.label)} type="file" accept=".pdf,.jpg,.jpeg,.png,.doc,.docx,.xls,.xlsx,.txt" multiple={isAddendum(t.label)||isIdentity(t.label)} disabled={disabled} onChange={e=>void upload(e,t)}/>
+      {uploading?.key===t.id?'Uploading…':isAddendum(t.label)?'Add document(s)':f?'Replace uploaded file':'Choose file'}
+      <input aria-label={'Upload '+(friendlyNames[t.label]||t.label)} type="file" accept=".pdf,.jpg,.jpeg,.png,.doc,.docx,.xls,.xlsx,.txt" multiple={isAddendum(t.label)} disabled={disabled} onChange={e=>void upload(e,t)}/>
      </label>
      {f&&!verified&&!waived&&<small className={styles.note}>A replacement keeps the earlier attachment in the audit history.</small>}
     </div>
