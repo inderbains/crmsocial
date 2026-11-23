@@ -6,7 +6,7 @@ import LawyerChoice from './lawyer-choice';
 import {emptyLawyer,saveLawyerEntry,type Lawyer,type LawyerEntry} from '../lib/lawyers';
 
 type FirmDeal={
- id:string;rv_stage:string|null;review_status:string;rv_post_firm_details_confirmed?:boolean;buyer_lawyer_id:string|null;seller_lawyer_id:string|null;
+ id:string;representation?:'listing'|'selling';rv_stage:string|null;review_status:string;rv_post_firm_details_confirmed?:boolean;buyer_lawyer_id:string|null;seller_lawyer_id:string|null;
  buyer_lawyer:Lawyer|null;seller_lawyer:Lawyer|null;listing_commission:number;selling_commission:number;
  gst_rate:number;deposit_amount:number;deposit_holder:'our_brokerage'|'other_brokerage';deposit_brokerage:string;
 };
@@ -47,13 +47,13 @@ export default function PostFirmDetails({deal,office,onSaved,notify}:{
   }catch(err){notify((err as Error).message)}finally{setBusy(false)}
  }
  return <section className="panel" aria-label="Post-firm lawyer and commission details" style={{margin:'20px 0',border:'1px solid #cbdcd1'}}>
-  <div className="sectionhead"><div><h2>After subjects removed — lawyers & commission</h2><p className="hint">Enter the conveyancing lawyers and commission details now that the sale is firm. This does not issue a payout.</p></div>{mayEdit&&!editing&&<button type="button" className="btn primary" onClick={()=>setEditing(true)}>{bothLawyers?'Edit details':'Enter details'}</button>}</div>
+  <div className="sectionhead"><div><h2>After subjects removed — lawyers & commission</h2><p className="hint">Agent: save both lawyer contacts, commission, GST rate and deposit details before Back Office approval. The brokerage will verify documents and generate/send the CIR after approval. Saving this does not issue a payout.</p></div>{mayEdit&&!editing&&<button type="button" className="btn primary" onClick={()=>setEditing(true)}>{bothLawyers?'Edit details':'Enter details'}</button>}</div>
   {!editing?<div className="crm-form-grid">
    <p><b>Buyer lawyer:</b> {deal.buyer_lawyer?.name||'Not entered'}</p>
    <p><b>Seller lawyer:</b> {deal.seller_lawyer?.name||'Not entered'}</p>
    <p><b>Listing commission:</b> ${Number(deal.listing_commission||0).toLocaleString('en-CA',{minimumFractionDigits:2,maximumFractionDigits:2})}</p>
    <p><b>Selling commission:</b> ${Number(deal.selling_commission||0).toLocaleString('en-CA',{minimumFractionDigits:2,maximumFractionDigits:2})}</p>
-   <p><b>GST rate:</b> {deal.gst_rate||0}%</p>
+   <p><b>GST rate:</b> {deal.gst_rate??5}% · On our-side commission: ${(Number(deal.representation==='listing'?deal.listing_commission:deal.selling_commission)*Number(deal.gst_rate??5)/100).toLocaleString('en-CA',{minimumFractionDigits:2,maximumFractionDigits:2})}</p>
    <p><b>Deposit:</b> ${Number(deal.deposit_amount||0).toLocaleString('en-CA',{minimumFractionDigits:2,maximumFractionDigits:2})} · {deal.deposit_holder==='other_brokerage'?'Other brokerage':'Our brokerage'}</p>
   </div>:<form onSubmit={e=>void save(e)}>
    <div className="crm-form-grid"><LawyerChoice side="buyer" value={buyer} lawyers={lawyers} onChange={setBuyer} disabled={busy}/><LawyerChoice side="seller" value={seller} lawyers={lawyers} onChange={setSeller} disabled={busy}/></div>
@@ -65,6 +65,6 @@ export default function PostFirmDetails({deal,office,onSaved,notify}:{
    </div>
    <div className="actions"><button className="btn primary" disabled={busy}>{busy?'Saving…':'Save lawyer & commission details'}</button><button className="btn" type="button" disabled={busy} onClick={()=>setEditing(false)}>Cancel</button></div>
   </form>}
-  {office&&<p className="hint">Back Office can review this information from the same transaction opened through its notification.</p>}
+  {details.deposit_holder==='our_brokerage'&&<p className="notice">Deposit held by our brokerage: reconcile the actual deposit receipt to the trust account in Back Office → Trust & bank. Entering an amount here does not itself create a bank deposit.</p>}{office&&<p className="hint">Back Office: verify the deposit, lawyers and commission before approving the firm-sale file. The CIR is generated from these saved numbers.</p>}
  </section>;
 }
