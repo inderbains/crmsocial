@@ -150,6 +150,15 @@ export default function TransactionActions({deal,docs,agentName,office,linked,no
    let selectedDocument=document;
    let buyerLawyerId:string|null=null,sellerLawyerId:string|null=null;
    if(action==='firm'){
+    // Accepted-offer documents stay attached without admin approval, but must exist
+    // before the firm-sale handoff. Check before registering any new firm documents.
+    const offer = await db.from('deal_requirements')
+     .select('label,document_id,rv_required,rv_waived')
+     .eq('deal_id',deal.id).eq('rv_phase','offer').eq('rv_required',true);
+    if(offer.error)throw new Error('Cannot check Accepted Offer documents: '+offer.error.message);
+    if(!offer.data?.length)throw new Error('The Accepted Offer document checklist is missing. Install the Accepted Offer requirements SQL first.');
+    const missingOffer=offer.data.filter(r=>!r.document_id&&!r.rv_waived);
+    if(missingOffer.length)throw new Error('Add the required Accepted Offer documents first: '+missingOffer.map(r=>r.label).join(', '));
     // Validate lawyer details before uploading any transaction documents.
     const savedBuyer=await saveLawyerEntry(db,buyerLawyer);
     const savedSeller=await saveLawyerEntry(db,sellerLawyer);
@@ -202,7 +211,7 @@ export default function TransactionActions({deal,docs,agentName,office,linked,no
  }
  return <section aria-label="Transaction actions" style={{margin:'20px 0'}}>
   <h3 style={{fontSize:17,margin:'0 0 10px'}}>Transaction actions</h3><p className="hint">Assigned Realtor: {agentName||'Agent profile name unavailable'}</p>
-  {conditional&&!office&&<p className="hint">Choose the outcome of the accepted offer. Required files are entered here only when that action is selected. Lawyer and commission details come after the sale becomes firm.</p>}
+  {conditional&&!office&&<p className="hint">First upload the required Accepted Offer documents in Documents & uploads. No admin approval is needed now. At Subject Removal / Direct Sold, submit the offer and firm-sale documents together for Back Office compliance review, along with commission, deposit and lawyer details.</p>}
   {deal.rv_stage==='Collapsed'&&<div className="notice">This offer is collapsed and closed. Its record remains for audit, but no additional transaction or commission actions are permitted.</div>}
   <div className="actions">
    {!office&&approved&&!sale&&!linked&&<button type="button" className="btn primary" disabled={busy} onClick={onConvert}>Accepted offer / create sale</button>}
