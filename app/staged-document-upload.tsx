@@ -25,6 +25,8 @@ const friendlyNames:Record<string,string>={
  'FINTRAC identity verification — buyer(s)':'Buyer FINTRAC ID verification',
  'Contract addendum (if applicable)':'Contract addendum',
  'Signed subject removal / unconditional contract':'Signed Subject Removal / Unconditional Contract',
+ 'Title search':'Title Search',
+ 'Property Disclosure Statement (PDS)':'Property Disclosure Statement (PDS)',
  'Trade record sheet':'Trade Record Sheet',
  'Sale report form':'Sale Report Form',
  'Deposit cheque copy / deposit receipt':'Deposit Cheque Copy / Receipt',
@@ -32,6 +34,7 @@ const friendlyNames:Record<string,string>={
  'Lawyer completion letter':'Lawyer Completion Confirmation','Brokerage completion confirmation (PDF)':'Brokerage Completion Confirmation PDF',
  'Commission Instruction Report — CIR (PDF)':'Commission Instruction Report (CIR)',
  'Internal commission payable statement (PDF)':'Internal Commission Payable PDF',
+ 'Closing addendum (if applicable)':'Closing Addendum / Additional Documents',
 };
 const isAddendum=(label:string)=>/addendum|extension/i.test(label);
 
@@ -103,7 +106,7 @@ export default function StagedDocumentUpload({deal,docs,office,displayStatus,onS
   const complete=items.filter(t=>t.required&&requirements.find(r=>r.label===t.label)?.document_id).length;
   const required=items.filter(t=>t.required).length;
   const pending=phase==='firm'&&!['Sold','Completed','Archived'].includes(deal.rv_stage ?? '');
-  const openNow=phase==='listing'||(phase==='offer'&&!['Sold','Completed','Archived'].includes(deal.rv_stage||''))||(phase==='firm'&&['Sold'].includes(deal.rv_stage||''))||(phase==='completion'&&['Completed','Archived'].includes(deal.rv_stage||''));
+  const openNow=phase==='listing'||(phase==='offer'&&!['Sold','Completed','Archived'].includes(deal.rv_stage||''))||(phase==='firm'&&['Accepted offer','Sold'].includes(deal.rv_stage||''))||(phase==='completion'&&['Completed','Archived'].includes(deal.rv_stage||''));
   return <details key={phase} className={styles.phase} open={openNow?true:undefined} aria-label={headings[phase]}>
    <summary className={styles.phaseHeading}><strong>{headings[phase]}</strong><small>{complete}/{required} required uploaded{pending?' · Next stage':''}</small></summary>
    {items.map(t=>{

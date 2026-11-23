@@ -1,0 +1,70 @@
+'use client';
+
+import {useEffect,useState,type FormEvent} from 'react';
+import {getSupabase} from '../lib/supabase';
+import LawyerChoice from './lawyer-choice';
+import {emptyLawyer,saveLawyerEntry,type Lawyer,type LawyerEntry} from '../lib/lawyers';
+
+type FirmDeal={
+ id:string;rv_stage:string|null;review_status:string;rv_post_firm_details_confirmed?:boolean;buyer_lawyer_id:string|null;seller_lawyer_id:string|null;
+ buyer_lawyer:Lawyer|null;seller_lawyer:Lawyer|null;listing_commission:number;selling_commission:number;
+ gst_rate:number;deposit_amount:number;deposit_holder:'our_brokerage'|'other_brokerage';deposit_brokerage:string;
+};
+
+export default function PostFirmDetails({deal,office,onSaved,notify}:{
+ deal:FirmDeal;office:boolean;onSaved:()=>Promise<void>;notify:(message:string)=>void;
+}){
+ const db=getSupabase()!;
+ const [editing,setEditing]=useState(false),[busy,setBusy]=useState(false),[lawyers,setLawyers]=useState<Lawyer[]>([]);
+ const [buyer,setBuyer]=useState<LawyerEntry>(emptyLawyer()),[seller,setSeller]=useState<LawyerEntry>(emptyLawyer());
+ const [details,setDetails]=useState({
+  listing_commission:0,selling_commission:0,gst_rate:5,deposit_amount:0,
+  deposit_holder:'our_brokerage' as 'our_brokerage'|'other_brokerage',deposit_brokerage:''
+ });
+ useEffect(()=>{
+  setBuyer(deal.buyer_lawyer||emptyLawyer());setSeller(deal.seller_lawyer||emptyLawyer());
+  setDetails({listing_commission:Number(deal.listing_commission||0),selling_commission:Number(deal.selling_commission||0),gst_rate:Number(deal.gst_rate??5),deposit_amount:Number(deal.deposit_amount||0),deposit_holder:deal.deposit_holder||'our_brokerage',deposit_brokerage:deal.deposit_brokerage||''});
+  setEditing(!office&&!deal.rv_post_firm_details_confirmed);
+ },[office,deal.rv_post_firm_details_confirmed,deal.id,deal.review_status,deal.buyer_lawyer_id,deal.seller_lawyer_id,deal.listing_commission,deal.selling_commission,deal.gst_rate,deal.deposit_amount,deal.deposit_holder,deal.deposit_brokerage]);
+ useEffect(()=>{void db.from('brokerage_lawyers').select('*').order('name').then(r=>{if(!r.error)setLawyers(r.data||[])})},[db]);
+ if(deal.rv_stage!=='Sold')return null;
+ const mayEdit=['Submitted','Approved','Changes requested'].includes(deal.review_status);
+ const bothLawyers=!!deal.buyer_lawyer_id&&!!deal.seller_lawyer_id;
+ async function save(e:FormEvent){
+  e.preventDefault();if(!mayEdit||busy)return;
+  setBusy(true);
+  try{
+   const buyerLawyer=await saveLawyerEntry(db,buyer);
+   const sellerLawyer=await saveLawyerEntry(db,seller);
+   const result=await db.rpc('rv_save_post_firm_details',{
+    p_deal:deal.id,p_buyer_lawyer:buyerLawyer?.id||null,p_seller_lawyer:sellerLawyer?.id||null,
+    p_listing_commission:details.listing_commission,p_selling_commission:details.selling_commission,
+    p_gst_rate:details.gst_rate,p_deposit_amount:details.deposit_amount,
+    p_deposit_holder:details.deposit_holder,p_deposit_brokerage:details.deposit_brokerage
+   });
+   if(result.error)throw result.error;
+   setEditing(false);await onSaved();notify('Post-firm lawyer, commission and deposit information saved.');
+  }catch(err){notify((err as Error).message)}finally{setBusy(false)}
+ }
+ return <section className="panel" aria-label="Post-firm lawyer and commission details" style={{margin:'20px 0',border:'1px solid #cbdcd1'}}>
+  <div className="sectionhead"><div><h2>After subjects removed — lawyers & commission</h2><p className="hint">Enter the conveyancing lawyers and commission details now that the sale is firm. This does not issue a payout.</p></div>{mayEdit&&!editing&&<button type="button" className="btn primary" onClick={()=>setEditing(true)}>{bothLawyers?'Edit details':'Enter details'}</button>}</div>
+  {!editing?<div className="crm-form-grid">
+   <p><b>Buyer lawyer:</b> {deal.buyer_lawyer?.name||'Not entered'}</p>
+   <p><b>Seller lawyer:</b> {deal.seller_lawyer?.name||'Not entered'}</p>
+   <p><b>Listing commission:</b> ${Number(deal.listing_commission||0).toLocaleString('en-CA',{minimumFractionDigits:2,maximumFractionDigits:2})}</p>
+   <p><b>Selling commission:</b> ${Number(deal.selling_commission||0).toLocaleString('en-CA',{minimumFractionDigits:2,maximumFractionDigits:2})}</p>
+   <p><b>GST rate:</b> {deal.gst_rate||0}%</p>
+   <p><b>Deposit:</b> ${Number(deal.deposit_amount||0).toLocaleString('en-CA',{minimumFractionDigits:2,maximumFractionDigits:2})} · {deal.deposit_holder==='other_brokerage'?'Other brokerage':'Our brokerage'}</p>
+  </div>:<form onSubmit={e=>void save(e)}>
+   <div className="crm-form-grid"><LawyerChoice side="buyer" value={buyer} lawyers={lawyers} onChange={setBuyer} disabled={busy}/><LawyerChoice side="seller" value={seller} lawyers={lawyers} onChange={setSeller} disabled={busy}/></div>
+   <h3>Commission and deposit</h3>
+   <div className="crm-form-grid">
+    {(['listing_commission','selling_commission','gst_rate','deposit_amount'] as const).map(k=><div className="field" key={k}><label htmlFor={'postfirm-'+k}>{{listing_commission:'Listing commission before GST (CAD)',selling_commission:'Selling commission before GST (CAD)',gst_rate:'GST rate (%)',deposit_amount:'Deposit amount (CAD)'}[k]}</label><input id={'postfirm-'+k} type="number" min="0" max={k==='gst_rate'?100:9999999999999} step="0.01" value={details[k]} disabled={busy} required onChange={e=>setDetails(old=>({...old,[k]:Number(e.target.value)}))}/></div>)}
+    <div className="field"><label htmlFor="postfirm-holder">Who holds the deposit?</label><select id="postfirm-holder" value={details.deposit_holder} disabled={busy} onChange={e=>setDetails(old=>({...old,deposit_holder:e.target.value as typeof old.deposit_holder}))}><option value="our_brokerage">Our brokerage</option><option value="other_brokerage">Other brokerage</option></select></div>
+    {details.deposit_holder==='other_brokerage'&&<div className="field"><label htmlFor="postfirm-brokerage">Brokerage holding the deposit</label><input id="postfirm-brokerage" required value={details.deposit_brokerage} disabled={busy} onChange={e=>setDetails(old=>({...old,deposit_brokerage:e.target.value}))}/></div>}
+   </div>
+   <div className="actions"><button className="btn primary" disabled={busy}>{busy?'Saving…':'Save lawyer & commission details'}</button><button className="btn" type="button" disabled={busy} onClick={()=>setEditing(false)}>Cancel</button></div>
+  </form>}
+  {office&&<p className="hint">Back Office can review this information from the same transaction opened through its notification.</p>}
+ </section>;
+}
