@@ -6,7 +6,7 @@ import LawyerChoice from './lawyer-choice';
 import {emptyLawyer,saveLawyerEntry,type Lawyer,type LawyerEntry} from '../lib/lawyers';
 
 type FirmDeal={
- id:string;representation?:'listing'|'selling';rv_stage:string|null;review_status:string;rv_post_firm_details_confirmed?:boolean;buyer_lawyer_id:string|null;seller_lawyer_id:string|null;
+ id:string;representation?:'listing'|'selling';parent_listing_id?:string|null;cooperating_agent?:string;rv_stage:string|null;review_status:string;rv_post_firm_details_confirmed?:boolean;buyer_lawyer_id:string|null;seller_lawyer_id:string|null;
  buyer_lawyer:Lawyer|null;seller_lawyer:Lawyer|null;listing_commission:number;selling_commission:number;
  gst_rate:number;deposit_amount:number;deposit_holder:'our_brokerage'|'other_brokerage';deposit_brokerage:string;
 };
@@ -29,6 +29,11 @@ export default function PostFirmDetails({deal,agentName,office,onSaved,notify}:{
  useEffect(()=>{void db.from('brokerage_lawyers').select('*').order('name').then(r=>{if(!r.error)setLawyers(r.data||[])})},[db]);
  if(deal.rv_stage!=='Sold')return null;
  const mayEdit=['Submitted','Approved','Changes requested'].includes(deal.review_status);
+ const dualCommission=Boolean(deal.parent_listing_id);
+ const singleListing=!dualCommission&&deal.representation==='listing';
+ const fmt=(v:number)=>new Intl.NumberFormat('en-CA',{style:'currency',currency:'CAD'}).format(v);
+ const commissionTotal=Number(deal.listing_commission||0)+Number(deal.selling_commission||0);
+ const commissionGST=Math.round(commissionTotal*Number(deal.gst_rate??5))/100;
  const bothLawyers=!!deal.buyer_lawyer_id&&!!deal.seller_lawyer_id;
  async function save(e:FormEvent){
   e.preventDefault();if(!mayEdit||busy)return;
@@ -38,7 +43,7 @@ export default function PostFirmDetails({deal,agentName,office,onSaved,notify}:{
    const sellerLawyer=await saveLawyerEntry(db,seller);
    const result=await db.rpc('rv_save_post_firm_details',{
     p_deal:deal.id,p_buyer_lawyer:buyerLawyer?.id||null,p_seller_lawyer:sellerLawyer?.id||null,
-    p_listing_commission:details.listing_commission,p_selling_commission:details.selling_commission,
+    p_listing_commission:dualCommission||singleListing?details.listing_commission:0,p_selling_commission:singleListing?0:details.selling_commission,
     p_gst_rate:details.gst_rate,p_deposit_amount:details.deposit_amount,
     p_deposit_holder:details.deposit_holder,p_deposit_brokerage:details.deposit_brokerage
    });
@@ -51,18 +56,19 @@ export default function PostFirmDetails({deal,agentName,office,onSaved,notify}:{
   {!editing?<div className="crm-form-grid">
    <p><b>Buyer lawyer:</b> {deal.buyer_lawyer?.name||'Not entered'}</p>
    <p><b>Seller lawyer:</b> {deal.seller_lawyer?.name||'Not entered'}</p>
-   <p><b>Listing commission:</b> ${Number(deal.listing_commission||0).toLocaleString('en-CA',{minimumFractionDigits:2,maximumFractionDigits:2})}</p>
-   <p><b>Selling commission:</b> ${Number(deal.selling_commission||0).toLocaleString('en-CA',{minimumFractionDigits:2,maximumFractionDigits:2})}</p>
-   <p><b>GST rate:</b> {deal.gst_rate??5}% · On our-side commission: ${(Number(deal.representation==='listing'?deal.listing_commission:deal.selling_commission)*Number(deal.gst_rate??5)/100).toLocaleString('en-CA',{minimumFractionDigits:2,maximumFractionDigits:2})}</p>
+   {(dualCommission||singleListing)&&<p><b>Listing side — Our Realtor {agentName||''}:</b> {fmt(Number(deal.listing_commission||0))} + GST {fmt(Math.round(Number(deal.listing_commission||0)*Number(deal.gst_rate??5))/100)}</p>}
+   {!singleListing&&<p><b>{dualCommission?'Selling side — Cooperating Realtor '+(deal.cooperating_agent||'not entered'):'Our Realtor — '+(agentName||'')}:</b> {fmt(Number(deal.selling_commission||0))} + GST {fmt(Math.round(Number(deal.selling_commission||0)*Number(deal.gst_rate??5))/100)}</p>}
+   <p><b>Total commission + GST:</b> {fmt(commissionTotal)} + {fmt(commissionGST)} = {fmt(commissionTotal+commissionGST)} (rate {deal.gst_rate??5}%)</p>
    <p><b>Deposit:</b> ${Number(deal.deposit_amount||0).toLocaleString('en-CA',{minimumFractionDigits:2,maximumFractionDigits:2})} · {deal.deposit_holder==='other_brokerage'?'Other brokerage':'Our brokerage'}</p>
   </div>:<form onSubmit={e=>void save(e)}>
    <div className="crm-form-grid"><LawyerChoice side="buyer" value={buyer} lawyers={lawyers} onChange={setBuyer} disabled={busy}/><LawyerChoice side="seller" value={seller} lawyers={lawyers} onChange={setSeller} disabled={busy}/></div>
-   <h3>Commission and deposit</h3>
+   <h3>Commission + applicable GST, and deposit holder</h3><p className="hint">{dualCommission?'Our listing sold: record both the listing-side and selling-side commissions. This does not create an additional agent payout.':'Sale only: our Realtor has one commission for the represented side.'}</p>
    <div className="crm-form-grid">
-    {(['listing_commission','selling_commission','gst_rate','deposit_amount'] as const).map(k=><div className="field" key={k}><label htmlFor={'postfirm-'+k}>{{listing_commission:'Listing commission before GST (CAD)',selling_commission:'Selling commission before GST (CAD)',gst_rate:'GST rate (%)',deposit_amount:'Deposit amount (CAD)'}[k]}</label><input id={'postfirm-'+k} type="number" min="0" max={k==='gst_rate'?100:9999999999999} step="0.01" value={details[k]} disabled={busy} required onChange={e=>setDetails(old=>({...old,[k]:Number(e.target.value)}))}/></div>)}
+    {(['listing_commission','selling_commission','gst_rate','deposit_amount'] as const).filter(k=>dualCommission||(singleListing?k!=='selling_commission':k!=='listing_commission')).map(k=><div className="field" key={k}><label htmlFor={'postfirm-'+k}>{{listing_commission:'Listing commission before GST (CAD)',selling_commission:'Selling commission before GST (CAD)',gst_rate:'GST rate (%)',deposit_amount:'Deposit amount (CAD)'}[k]}</label><input id={'postfirm-'+k} type="number" min="0" max={k==='gst_rate'?100:9999999999999} step="0.01" value={details[k]} disabled={busy} required onChange={e=>setDetails(old=>({...old,[k]:Number(e.target.value)}))}/></div>)}
     <div className="field"><label htmlFor="postfirm-holder">Who holds the deposit?</label><select id="postfirm-holder" value={details.deposit_holder} disabled={busy} onChange={e=>setDetails(old=>({...old,deposit_holder:e.target.value as typeof old.deposit_holder}))}><option value="our_brokerage">Our brokerage</option><option value="other_brokerage">Other brokerage</option></select></div>
     {details.deposit_holder==='other_brokerage'&&<div className="field"><label htmlFor="postfirm-brokerage">Brokerage holding the deposit</label><input id="postfirm-brokerage" required value={details.deposit_brokerage} disabled={busy} onChange={e=>setDetails(old=>({...old,deposit_brokerage:e.target.value}))}/></div>}
    </div>
+   <p className="notice">Estimated commission: {fmt(((dualCommission||singleListing)?details.listing_commission:0)+(singleListing?0:details.selling_commission))} + GST {fmt(Math.round((((dualCommission||singleListing)?details.listing_commission:0)+(singleListing?0:details.selling_commission))*details.gst_rate)/100)} = {fmt((((dualCommission||singleListing)?details.listing_commission:0)+(singleListing?0:details.selling_commission))+Math.round((((dualCommission||singleListing)?details.listing_commission:0)+(singleListing?0:details.selling_commission))*details.gst_rate)/100)}. Deposit holder: {details.deposit_holder==='other_brokerage'?details.deposit_brokerage:'Our brokerage'}. Save before manager approval.</p>
    <div className="actions"><button className="btn primary" disabled={busy}>{busy?'Saving…':'Save lawyer & commission details'}</button><button className="btn" type="button" disabled={busy} onClick={()=>setEditing(false)}>Cancel</button></div>
   </form>}
   {details.deposit_holder==='our_brokerage'&&<p className="notice">Deposit held by our brokerage: reconcile the actual deposit receipt to the trust account in Back Office → Trust & bank. Entering an amount here does not itself create a bank deposit.</p>}{office&&<p className="hint">Back Office: verify the deposit, lawyers and commission before approving the firm-sale file. The CIR is generated from these saved numbers.</p>}

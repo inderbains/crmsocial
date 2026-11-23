@@ -3,6 +3,8 @@
 import {useEffect,useState,type ChangeEvent} from 'react';
 import {getSupabase} from '../lib/supabase';
 import {brokerageDay} from '../lib/listing-status';
+import LawyerChoice from './lawyer-choice';
+import {emptyLawyer,hasLawyer,saveLawyerEntry,type Lawyer,type LawyerEntry} from '../lib/lawyers';
 
 type DocumentRef={id:string;name:string};
 type ActionName='firm'|'extend_subject'|'collapse'|'terminate'|'extend_listing'|'extend_completion'|'complete'|'funds'|'archive'|'missing';
@@ -28,13 +30,18 @@ const labels:Partial<Record<ActionName,string>>={
 };
 
 export default function TransactionActions({deal,docs,agentName,office,linked,notify,reload,onConvert,onEdit}:{
- deal:{id:string;kind:string;representation:'listing'|'selling';rv_stage:string|null;review_status:string;rv_completed_date:string|null;rv_funds_verified:boolean;updated_at:string};
+ deal:{id:string;kind:string;representation:'listing'|'selling';parent_listing_id?:string|null;cooperating_agent?:string;rv_stage:string|null;review_status:string;rv_completed_date:string|null;rv_funds_verified:boolean;updated_at:string;listing_commission?:number;selling_commission?:number;gst_rate?:number;deposit_amount?:number;deposit_holder?:'our_brokerage'|'other_brokerage';deposit_brokerage?:string};
  docs:DocumentRef[];agentName?:string;office:boolean;linked:boolean;notify:(s:string)=>void;
  reload:()=>Promise<void>;onConvert:()=>void;onEdit:()=>void;
 }){
  const db=getSupabase()!;
  const [action,setAction]=useState<ActionName|''>('');
  const [saleOutcome,setSaleOutcome]=useState<'subject_removed'|'direct_sold'>('subject_removed');
+ const [firmStep,setFirmStep]=useState<1|2|3>(1);
+ const [lawyers,setLawyers]=useState<Lawyer[]>([]);
+ const [buyerLawyer,setBuyerLawyer]=useState<LawyerEntry>(emptyLawyer());
+ const [sellerLawyer,setSellerLawyer]=useState<LawyerEntry>(emptyLawyer());
+ const [financial,setFinancial]=useState({listing_commission:0,selling_commission:0,gst_rate:5,deposit_amount:0,deposit_holder:'' as ''|'our_brokerage'|'other_brokerage',deposit_brokerage:''});
  const [date,setDate]=useState(brokerageDay());
  const [document,setDocument]=useState('');
  const [newDocs,setNewDocs]=useState<DocumentRef[]>([]);
@@ -47,13 +54,25 @@ export default function TransactionActions({deal,docs,agentName,office,linked,no
  const [note,setNote]=useState('');
  const [busy,setBusy]=useState(false);
  const [savingLabel,setSavingLabel]=useState('');
+ useEffect(()=>{void db.from('brokerage_lawyers').select('*').order('name').then(r=>{if(!r.error)setLawyers(r.data||[])})},[db]);
+ const dualCommission=Boolean(deal.parent_listing_id);
+ const singleListing=!dualCommission&&deal.representation==='listing';
+ const validMoney=[financial.listing_commission,financial.selling_commission,financial.gst_rate,financial.deposit_amount].every(n=>Number.isFinite(n)&&n>=0)
+  &&financial.gst_rate<=100&&(dualCommission?financial.listing_commission+financial.selling_commission>0:singleListing?financial.listing_commission>0:financial.selling_commission>0)
+  &&Boolean(financial.deposit_holder)&&(financial.deposit_holder!=='other_brokerage'||Boolean(financial.deposit_brokerage.trim()));
+ const money=(n:number)=>new Intl.NumberFormat('en-CA',{style:'currency',currency:'CAD'}).format(Number(n)||0);
+ const gross=dualCommission?financial.listing_commission+financial.selling_commission:singleListing?financial.listing_commission:financial.selling_commission;
+ const gst=Math.round(gross*financial.gst_rate)/100;
+ const readyLawyers=hasLawyer(buyerLawyer)&&hasLawyer(sellerLawyer);
+ const setAmount=(k:'listing_commission'|'selling_commission'|'gst_rate'|'deposit_amount',value:string)=>setFinancial(v=>({...v,[k]:Number(value)}));
  function resetAction(){
-  setAction('');setSaleOutcome('subject_removed');setDate(brokerageDay());setSaleOutcome('subject_removed');setDocument('');setNewDocs([]);setNote('');
+  setAction('');setFirmStep(1);setSaleOutcome('subject_removed');setDate(brokerageDay());setDocument('');setNewDocs([]);setNote('');
   setFirmFiles({...EMPTY_FIRM});setFirmSaved({});setAddendums([]);setAddendumsSaved({});
   setExtensionFile(null);setExtensionSaved('');
  }
  useEffect(()=>{
-  setAction('');setSaleOutcome('subject_removed');setDocument('');setNewDocs([]);setNote('');setDate(brokerageDay());
+  setAction('');setFirmStep(1);setSaleOutcome('subject_removed');setDocument('');setNewDocs([]);setNote('');setDate(brokerageDay());
+  setFinancial({listing_commission:Number(deal.listing_commission||0),selling_commission:Number(deal.selling_commission||0),gst_rate:Number(deal.gst_rate??5),deposit_amount:Number(deal.deposit_amount||0),deposit_holder:deal.deposit_holder||'',deposit_brokerage:deal.deposit_brokerage||''});setBuyerLawyer(emptyLawyer());setSellerLawyer(emptyLawyer());
   setFirmFiles({...EMPTY_FIRM});setFirmSaved({});setAddendums([]);setAddendumsSaved({});
   setExtensionFile(null);setExtensionSaved('');
  },[deal.id]);
@@ -80,7 +99,7 @@ export default function TransactionActions({deal,docs,agentName,office,linked,no
  // the select's onChange: it also clears the controlled value and can be
  // confusing when a transaction view refreshes during a document upload.
  function chooseAction(next:ActionName|''){
-  setDate(brokerageDay());setSaleOutcome('subject_removed');setDocument('');setNewDocs([]);setNote('');
+  setDate(brokerageDay());setSaleOutcome('subject_removed');setFirmStep(1);setDocument('');setNewDocs([]);setNote('');
   setFirmFiles({...EMPTY_FIRM});setFirmSaved({});setAddendums([]);setAddendumsSaved({});
   setExtensionFile(null);setExtensionSaved('');
   setAction(next);
@@ -121,13 +140,21 @@ export default function TransactionActions({deal,docs,agentName,office,linked,no
   if(!action)return;
   if(needsPDF&&!document){notify('Upload or select the signed PDF for this action.');return}
   if(action==='firm'&&missingFirm){notify(deal.representation==='listing'?'Required: Signed subject removal or unconditional contract, Title Search, PDS, Deposit Cheque Copy, Trade Record Sheet, Sale Report Form and Receipt of Funds.':'Required: Signed subject removal or unconditional contract, Title Search, PDS, Deposit Cheque Copy, Trade Record Sheet, Sale Report Form and Receipt of Funds.');return}
+  if(action==='firm'&&!validMoney){notify('Enter the agent-side commission(s), GST rate, deposit amount and who holds the deposit.');return}
+  if(action==='firm'&&!readyLawyers){notify('Enter or select both the buyer and seller lawyer contacts.');return}
   if(action==='extend_subject'&&!extensionFile&&!extensionSaved){notify('Select the signed subject extension PDF.');return}
   if(action==='extend_subject'&&(!date||date.length!==10)){notify('Enter the revised subject removal date.');return}
   if(action==='collapse'&&!window.confirm('Close this offer as COLLAPSED? No document is required. The sale will be locked and excluded from firm sales.'))return;
   setBusy(true);
   try{
    let selectedDocument=document;
+   let buyerLawyerId:string|null=null,sellerLawyerId:string|null=null;
    if(action==='firm'){
+    // Validate lawyer details before uploading any transaction documents.
+    const savedBuyer=await saveLawyerEntry(db,buyerLawyer);
+    const savedSeller=await saveLawyerEntry(db,sellerLawyer);
+    if(!savedBuyer||!savedSeller)throw new Error('Both lawyer contacts are required.');
+    buyerLawyerId=savedBuyer.id;sellerLawyerId=savedSeller.id;
     // Keep uploaded IDs across retries if a later file or the database action fails.
     const persisted={...firmSaved};
     for(const field of firmFields){
@@ -155,14 +182,16 @@ export default function TransactionActions({deal,docs,agentName,office,linked,no
     }else selectedDocument=extensionSaved;
    }
    setSavingLabel('Recording transaction action…');
-   const response=action==='extend_subject'||action==='collapse'
+   const response=action==='firm'
+    ?await db.rpc('rv059_submit_firm_with_details',{p_deal:deal.id,p_date:date,p_document:selectedDocument,p_outcome:saleOutcome,p_buyer_lawyer:buyerLawyerId,p_seller_lawyer:sellerLawyerId,p_listing_commission:dualCommission||singleListing?financial.listing_commission:0,p_selling_commission:singleListing?0:financial.selling_commission,p_gst_rate:financial.gst_rate,p_deposit_amount:financial.deposit_amount,p_deposit_holder:financial.deposit_holder,p_deposit_brokerage:financial.deposit_brokerage})
+    :action==='extend_subject'||action==='collapse'
     ?await db.rpc('rv056_offer_update',{p_deal:deal.id,p_action:action,p_date:action==='extend_subject'?date:null,p_document:action==='extend_subject'?selectedDocument||null:null})
     :action==='archive'
     ?await db.rpc('rv_close_compliant_file',{p_deal:deal.id})
-    :await db.rpc('rv_tx_action',{p_deal:deal.id,p_action:action,p_date:needsDate?date:null,p_document:action==='collapse'?null:selectedDocument||null,p_note:action==='firm'?(saleOutcome==='direct_sold'?'direct_sold_no_subjects':'subject_removed'):note});
+    :await db.rpc('rv_tx_action',{p_deal:deal.id,p_action:action,p_date:needsDate?date:null,p_document:selectedDocument||null,p_note:note});
    if(response.error)throw response.error;
    resetAction();await reload();
-   notify(action==='collapse'?'Offer collapsed. The linked listing is active again. Back Office notified; no compliance review required.':action==='firm'?'Firm sale submitted to Back Office. Save the lawyer, commission, GST and deposit details before the manager approves.':action==='extend_subject'?'Subject extension recorded. Back Office notified; no compliance approval needed.':'Transaction updated.');
+   notify(action==='collapse'?'Offer collapsed. The linked listing is active again. Back Office notified; no compliance review required.':action==='firm'?'Firm sale, documents, GST, commission, deposit holder and both lawyers submitted together for Back Office approval.':action==='extend_subject'?'Subject extension recorded. Back Office notified; no compliance approval needed.':'Transaction updated.');
   }catch(err){notify((err as Error).message)}
   finally{setBusy(false);setSavingLabel('')}
  }
@@ -188,8 +217,8 @@ export default function TransactionActions({deal,docs,agentName,office,linked,no
   {action&&<form className="panel" style={{marginTop:12}} onSubmit={e=>{e.preventDefault();void submit()}}>
    <h3>{options.find(o=>o.id===action)?.label}</h3>
    {needsDate&&<div className="field"><label htmlFor="rv-action-date">{action==='firm'?(saleOutcome==='direct_sold'?'Date the unconditional offer became firm':'Actual date subjects were removed'):action==='extend_subject'?'New subject removal / extension date':action==='complete'?'Actual legal completion date':'Effective / revised date'}</label><input id="rv-action-date" type="date" required value={date} onChange={e=>setDate(e.target.value)} disabled={busy}/></div>}
-   {action==='firm'&&<div style={{display:'grid',gap:13}}><fieldset style={{border:'1px solid #cbd9cc',padding:12,borderRadius:8}}><legend>How did this offer become firm?</legend><label style={{display:'block',marginBottom:8}}><input style={{width:'auto',marginRight:8}} type="radio" name="sale-outcome" checked={saleOutcome==='subject_removed'} onChange={()=>setSaleOutcome('subject_removed')} disabled={busy}/>Subjects removed</label><label style={{display:'block'}}><input style={{width:'auto',marginRight:8}} type="radio" name="sale-outcome" checked={saleOutcome==='direct_sold'} onChange={()=>setSaleOutcome('direct_sold')} disabled={busy}/>Direct sold — unconditional offer, no subjects</label><p className="hint">For a direct sale, attach the signed unconditional Contract of Purchase and Sale in the first document slot instead of a subject-removal notice.</p></fieldset>
-    <p className="hint">Attach these documents when marking the sale firm. They will appear in the compliance file after submission. Each file may be up to 20 MB.</p>
+   {action==='firm'&&firmStep===1&&<div style={{display:'grid',gap:13}}><fieldset style={{border:'1px solid #cbd9cc',padding:12,borderRadius:8}}><legend>How did this offer become firm?</legend><label style={{display:'block',marginBottom:8}}><input style={{width:'auto',marginRight:8}} type="radio" name="sale-outcome" checked={saleOutcome==='subject_removed'} onChange={()=>setSaleOutcome('subject_removed')} disabled={busy}/>Subjects removed</label><label style={{display:'block'}}><input style={{width:'auto',marginRight:8}} type="radio" name="sale-outcome" checked={saleOutcome==='direct_sold'} onChange={()=>setSaleOutcome('direct_sold')} disabled={busy}/>Direct sold — unconditional offer, no subjects</label><p className="hint">For a direct sale, attach the signed unconditional Contract of Purchase and Sale in the first document slot instead of a subject-removal notice.</p></fieldset>
+    <p className="hint">Step 1 of 3 — Attach all required documents. These are uploaded with the final submission, not sent to Back Office until you confirm Step 3. Attach these documents when marking the sale firm. They will appear in the compliance file after submission. Each file may be up to 20 MB.</p>
     <p className="hint"><strong>{deal.representation==='listing'?'Our listing — seller-side sale':'Buyer-side sale'}</strong> · All fields below are required for this transaction side.</p>
     {firmFields.map(field=><div className="field" key={field.key}>
      <label htmlFor={'rv-firm-'+field.key}>{field.label} <strong style={{color:'#a34422'}}>(Required)</strong></label>
@@ -202,6 +231,28 @@ export default function TransactionActions({deal,docs,agentName,office,linked,no
      <input id="rv-firm-addendums" type="file" multiple accept=".pdf,.jpg,.jpeg,.png,.doc,.docx,.xls,.xlsx,.txt" disabled={busy} onChange={e=>{setAddendums(Array.from(e.target.files||[]));setAddendumsSaved({})}}/>
      {addendums.length>0&&<small>{addendums.length} file(s) selected. Upload supports PDF, images, Word, Excel and text.</small>}
     </div>
+    <div className="actions"><button type="button" className="btn primary" disabled={busy||missingFirm} onClick={()=>setFirmStep(2)}>Next: Commission, GST & deposit →</button></div>
+   </div>}
+   {action==='firm'&&firmStep===2&&<div className="panel" style={{marginTop:12}}>
+    <h3>Step 2 of 3 · Realtor commission, GST & deposit</h3>
+    <p className="hint"><b>Our Realtor:</b> {agentName||'Agent profile name unavailable'}. {dualCommission?'Our listing has been sold: record listing-side commission (our Realtor) and selling-side commission (cooperating Realtor). These amounts are separate brokerage-side commissions; they do not automatically authorize two agent payouts.':'Sale-only transaction: enter only the commission for our Realtor’s side. Do not calculate a second internal Realtor payout.'}</p>
+    <div className="crm-form-grid">
+     {(dualCommission||singleListing)&&<div className="field"><label htmlFor="rv-listing-commission">{dualCommission?'Listing Realtor side':'Our Realtor — Listing side'} — commission before GST (CAD)</label><input id="rv-listing-commission" type="number" min="0" step="0.01" required value={financial.listing_commission} onChange={e=>setAmount('listing_commission',e.target.value)}/></div>}
+     {!singleListing&&<div className="field"><label htmlFor="rv-selling-commission">{dualCommission?`Selling Realtor side${deal.cooperating_agent?' · '+deal.cooperating_agent:''}`:'Our Realtor'} — commission before GST (CAD)</label><input id="rv-selling-commission" type="number" min="0" step="0.01" required value={financial.selling_commission} onChange={e=>setAmount('selling_commission',e.target.value)}/></div>}
+     <div className="field"><label htmlFor="rv-commission-gst-rate">Applicable commission GST rate (%)</label><input id="rv-commission-gst-rate" type="number" min="0" max="100" step="0.01" required value={financial.gst_rate} onChange={e=>setAmount('gst_rate',e.target.value)}/></div>
+     <div className="field"><label htmlFor="rv-deposit-amount">Deposit amount (CAD)</label><input id="rv-deposit-amount" type="number" min="0" step="0.01" required value={financial.deposit_amount} onChange={e=>setAmount('deposit_amount',e.target.value)}/></div>
+     <div className="field"><label htmlFor="rv-deposit-held-by">Deposit held by (Required)</label><select id="rv-deposit-held-by" required value={financial.deposit_holder} onChange={e=>setFinancial(v=>({...v,deposit_holder:e.target.value as typeof v.deposit_holder}))}><option value="">Choose deposit holder</option><option value="our_brokerage">Our brokerage — trust account</option><option value="other_brokerage">Other brokerage</option></select></div>
+     {financial.deposit_holder==='other_brokerage'&&<div className="field"><label htmlFor="rv-deposit-brokerage">Other brokerage holding deposit (Required)</label><input id="rv-deposit-brokerage" required value={financial.deposit_brokerage} onChange={e=>setFinancial(v=>({...v,deposit_brokerage:e.target.value}))}/></div>}
+    </div>
+    <div className="notice"><strong>Commission before GST:</strong> {money(gross)} · <strong>GST:</strong> {money(gst)} · <strong>Total including GST:</strong> {money(gross+gst)}{dualCommission&&<p>Listing side: {money(financial.listing_commission)} + GST {money(Math.round(financial.listing_commission*financial.gst_rate)/100)} · Selling side: {money(financial.selling_commission)} + GST {money(Math.round(financial.selling_commission*financial.gst_rate)/100)}</p>}</div>
+    <p className="hint">Use the GST rate applicable to this transaction and verify tax-registration status before authorizing an agent payout. Choosing “Our brokerage” records the deposit holder but does not falsely mark bank funds received; Back Office must reconcile the actual trust deposit.</p>
+    <div className="actions"><button type="button" className="btn" onClick={()=>setFirmStep(1)}>← Documents</button><button type="button" className="btn primary" disabled={!validMoney} onClick={()=>setFirmStep(3)}>Next: Lawyer contacts →</button></div>
+   </div>}
+   {action==='firm'&&firmStep===3&&<div className="panel" style={{marginTop:12}}>
+    <h3>Step 3 of 3 · Lawyer information & final submission</h3>
+    <p className="hint">Review and add the buyer and seller lawyer contacts. Your final submission sends documents, commissions plus GST and deposit-holder details together to Back Office for review.</p>
+    <div className="crm-form-grid"><LawyerChoice side="buyer" value={buyerLawyer} lawyers={lawyers} onChange={setBuyerLawyer} disabled={busy}/><LawyerChoice side="seller" value={sellerLawyer} lawyers={lawyers} onChange={setSellerLawyer} disabled={busy}/></div>
+    <div className="actions"><button type="button" className="btn" disabled={busy} onClick={()=>setFirmStep(2)}>← Commission & deposit</button></div>
    </div>}
    {action==='extend_subject'&&<div className="field">
     <label htmlFor="rv-subject-extension-pdf">Signed Subject Extension (PDF) <strong style={{color:'#a34422'}}>(Required)</strong></label>
@@ -217,10 +268,10 @@ export default function TransactionActions({deal,docs,agentName,office,linked,no
    </div>}
    {needsNote&&<div className="field"><label htmlFor="rv-action-note">{action==='funds'?'Verified bank / receipt reference':action==='missing'?'Missing documents and instructions':'Termination reason'}</label><textarea id="rv-action-note" required value={note} onChange={e=>setNote(e.target.value)}/></div>}
    {action==='collapse'&&<p className="hint">No PDF, date, or other document is required. Confirming will mark the offer collapsed, close the sale file and preserve its audit history.</p>}
-   {action==='firm'&&<p className="hint">Submitting this stage automatically sends it to Back Office review. The agent must then save the lawyer contacts, commission (GST calculated from the saved rate) and deposit holder/amount. Back Office approves only after verifying the documents and those details. A deposit held by your brokerage must be reconciled in Trust & Bank.</p>}
+   {action==='firm'&&firmStep===3&&<p className="hint">All three steps are submitted as one firm-sale action for review. Back Office will verify the actual documents, amounts and lawyer details before approving and preparing the CIR. A deposit held by our brokerage must be reconciled in Trust & Bank.</p>}
    {action==='funds'&&<p className="hint">Only confirm after the full commission has cleared. This action does not move money.</p>}
    {savingLabel&&<p role="status" className="hint">{savingLabel}</p>}
-   <div className="actions"><button className="btn primary" disabled={busy||(needsPDF&&!document)||(action==='firm'&&missingFirm)||(action==='extend_subject'&&!extensionFile&&!extensionSaved)}>{busy?'Working…':action==='collapse'?'Confirm collapsed / close file':action==='firm'?'Submit firm sale & documents':action==='extend_subject'?'Confirm subject extension':'Confirm '+options.find(o=>o.id===action)?.label.toLowerCase()}</button><button className="btn" type="button" disabled={busy} onClick={resetAction}>Cancel</button></div>
+   <div className="actions">{(action!=='firm'||firmStep===3)&&<button className="btn primary" disabled={busy||(needsPDF&&!document)||(action==='firm'&&(missingFirm||!validMoney||!readyLawyers))||(action==='extend_subject'&&!extensionFile&&!extensionSaved)}>{busy?'Working…':action==='collapse'?'Confirm collapsed / close file':action==='firm'?'Submit firm sale, commission & lawyers':action==='extend_subject'?'Confirm subject extension':'Confirm '+options.find(o=>o.id===action)?.label.toLowerCase()}</button>}<button className="btn" type="button" disabled={busy} onClick={resetAction}>Cancel</button></div>
   </form>}
  </section>;
 }

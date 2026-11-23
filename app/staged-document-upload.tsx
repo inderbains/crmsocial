@@ -120,7 +120,7 @@ export default function StagedDocumentUpload({deal,docs,agentName,office,display
   const pending=phase==='firm'&&!['Sold','Completed','Archived'].includes(deal.rv_stage ?? '');
   const openNow=phase==='listing'||(phase==='offer'&&!['Sold','Completed','Archived'].includes(deal.rv_stage||''))||(phase==='firm'&&['Accepted offer','Sold'].includes(deal.rv_stage||''))||(phase==='completion'&&['Completed','Archived'].includes(deal.rv_stage||''));
   return <details key={phase} className={styles.phase} open={openNow?true:undefined} aria-label={headings[phase]}>
-   <summary className={styles.phaseHeading}><strong>{headings[phase]}</strong><small>{complete}/{required} required uploaded{pending?' · Next stage':''}</small></summary>
+   <summary className={styles.phaseHeading}><strong>{headings[phase]}</strong><small>{required>0?`${complete}/${required} required uploaded`:'Optional supporting documents'}{pending?' · Next stage':''}</small></summary>
    {items.map(t=>{
     const r=requirements.find(x=>x.label===t.label);
     const f=r?.document_id?docs.find(d=>d.id===r.document_id):undefined;
@@ -146,6 +146,6 @@ export default function StagedDocumentUpload({deal,docs,agentName,office,display
   {error&&<p role="alert" className={styles.error}>{error}</p>}
   {!loading&&!error&&applicable.length===0&&<p className={styles.helper}>No document templates are configured for this transaction. Ask Back Office to configure Compliance forms.</p>}
   {!loading&&!error&&activePhases.map(renderPhase)}
-  {!office&&!loading&&!error&&<p className={styles.helper}>Upload the required forms before submitting to Back Office. Back Office reviews and verifies each file. FINTRAC identity documents are private and must not be sent to conveyancing recipients.</p>}
+  {!office&&!loading&&!error&&<p className={styles.helper}>{deal.kind==='Sale'&&!['Sold','Completed','Archived'].includes(deal.rv_stage||'')?'Accepted Offer files stay attached to this transaction. No compliance submission or approval is required at this stage. Continue through Transaction Actions when subjects are removed or the sale becomes unconditional.':'Required documents are submitted for Back Office review at the applicable stage. Uploading a file does not mean it has been approved.'} FINTRAC identity documents are private and must not be sent to conveyancing recipients.</p>}
  </div>;
 }
