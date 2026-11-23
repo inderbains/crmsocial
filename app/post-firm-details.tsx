@@ -5,6 +5,20 @@ import {getSupabase} from '../lib/supabase';
 import LawyerChoice from './lawyer-choice';
 import {emptyLawyer,saveLawyerEntry,type Lawyer,type LawyerEntry} from '../lib/lawyers';
 
+// Keep one visible lawyer/commission panel per transaction in a browser view.
+// A transaction is sometimes mounted more than once through different workspace surfaces.
+// Preserve each mount's React state; never delete DOM nodes behind React's back.
+type VisiblePanel = { id:symbol; named:boolean; setVisible:(visible:boolean)=>void };
+const visiblePanelsByDeal = new Map<string,Map<symbol,VisiblePanel>>();
+function electVisiblePanel(dealId:string){
+ const group=visiblePanelsByDeal.get(dealId);
+ if(!group?.size)return;
+ const members=Array.from(group.values());
+ const preferred=members.find(member=>member.named)||members[0];
+ members.forEach(member=>member.setVisible(member.id===preferred.id));
+ if(members.length>1)console.warn('[RealVolt] Duplicate post-firm panel mounts detected for file',dealId,'count',members.length);
+}
+
 type FirmDeal={
  id:string;representation?:'listing'|'selling';parent_listing_id?:string|null;cooperating_agent?:string;rv_stage:string|null;review_status:string;rv_post_firm_details_confirmed?:boolean;buyer_lawyer_id:string|null;seller_lawyer_id:string|null;
  buyer_lawyer:Lawyer|null;seller_lawyer:Lawyer|null;listing_commission:number;selling_commission:number;
@@ -14,6 +28,20 @@ type FirmDeal={
 export default function PostFirmDetails({deal,agentName,office,onSaved,notify}:{
  deal:FirmDeal;agentName?:string;office:boolean;onSaved:()=>Promise<void>;notify:(message:string)=>void;
 }){
+ const [panelInstanceId]=useState(()=>Symbol('rv-post-firm-panel'));
+ const [isPrimaryPanel,setIsPrimaryPanel]=useState(false);
+ useEffect(()=>{
+  let group=visiblePanelsByDeal.get(deal.id);
+  if(!group){group=new Map();visiblePanelsByDeal.set(deal.id,group);}
+  group.set(panelInstanceId,{id:panelInstanceId,named:!!agentName?.trim(),setVisible:setIsPrimaryPanel});
+  electVisiblePanel(deal.id);
+  return ()=>{
+   const currentGroup=visiblePanelsByDeal.get(deal.id);
+   currentGroup?.delete(panelInstanceId);
+   if(!currentGroup?.size)visiblePanelsByDeal.delete(deal.id);
+   else electVisiblePanel(deal.id);
+  };
+ },[deal.id,panelInstanceId,agentName]);
  const db=getSupabase()!;
  const [editing,setEditing]=useState(false),[busy,setBusy]=useState(false),[lawyers,setLawyers]=useState<Lawyer[]>([]);
  const [buyer,setBuyer]=useState<LawyerEntry>(emptyLawyer()),[seller,setSeller]=useState<LawyerEntry>(emptyLawyer());
@@ -27,7 +55,7 @@ export default function PostFirmDetails({deal,agentName,office,onSaved,notify}:{
   setEditing(!office&&!deal.rv_post_firm_details_confirmed);
  },[office,deal.rv_post_firm_details_confirmed,deal.id,deal.review_status,deal.buyer_lawyer_id,deal.seller_lawyer_id,deal.listing_commission,deal.selling_commission,deal.gst_rate,deal.deposit_amount,deal.deposit_holder,deal.deposit_brokerage]);
  useEffect(()=>{void db.from('brokerage_lawyers').select('*').order('name').then(r=>{if(!r.error)setLawyers(r.data||[])})},[db]);
- if(deal.rv_stage!=='Sold')return null;
+ if(deal.rv_stage!=='Sold'||!isPrimaryPanel)return null;
  const mayEdit=['Submitted','Approved','Changes requested'].includes(deal.review_status);
  const dualCommission=Boolean(deal.parent_listing_id);
  const singleListing=!dualCommission&&deal.representation==='listing';
