@@ -71,3 +71,20 @@
 .goalForm{margin-top:10px}.goalForm input{width:73px;font-size:12px;border:1px solid #b6cbb3;border-radius:6px;padding:5px;color:#193e32;background:white}
 @media(max-width:900px){.personalMain{grid-template-columns:1fr;min-height:0}.personalLeft{padding-right:125px;min-height:0}.personalRight{padding:14px 0 0;margin-top:14px}.personalRight .results{height:auto;max-height:170px}}
 @media(max-width:540px){.personalLeft{padding:45px 0 0}.quoteDisplay{font-size:15px}}
+
+/* Fix 053: reminder editor is a compact modal instead of expanding the dashboard. */
+.reminderOverlay{position:fixed;inset:0;z-index:6000;display:flex;align-items:center;justify-content:center;padding:16px;background:rgba(15,38,29,.47);backdrop-filter:blur(3px)}
+.reminderModal{width:min(540px,100%);max-height:min(88vh,740px);overflow-y:auto;background:#fff;border:1px solid #dce5dc;border-radius:17px;box-shadow:0 20px 60px rgba(10,28,21,.22);color:var(--brand-dark,#193e32);padding:24px 26px}
+.reminderModalHead{display:flex;justify-content:space-between;align-items:flex-start;gap:14px;margin-bottom:20px}
+.reminderModalHead h2{font-size:23px;line-height:1.22;letter-spacing:-.5px;margin:2px 0 6px;color:#193e32}
+.reminderModalHead p:last-child{font-size:12px;color:#6b7d70;margin:0}
+.reminderClose{flex-shrink:0;display:grid;place-items:center;border:1px solid #dce5da;background:#f7faf5;color:#193e32;border-radius:9px;height:33px;width:33px;font-size:25px;line-height:1;cursor:pointer}
+.reminderClose:hover{background:#eef5e9}
+.reminderForm{display:grid;gap:16px}
+.reminderForm .editorGrid{grid-template-columns:minmax(0,1fr) 160px;gap:12px}
+.reminderForm label{display:grid;gap:7px;color:#284839;font-size:12px;font-weight:750}
+.reminderForm input,.reminderForm textarea{width:100%;min-width:0;box-sizing:border-box;border:1px solid #cddacb;border-radius:9px;padding:11px 12px;font:inherit;font-size:13px;color:#193e32;background:white}
+.reminderForm textarea{resize:vertical;min-height:84px}
+.reminderForm input:focus,.reminderForm textarea:focus{outline:2px solid #b0c9b1;outline-offset:1px}
+.reminderForm .editorActions{margin-top:2px;gap:10px}
+@media(max-width:540px){.reminderModal{padding:20px 16px}.reminderForm .editorGrid{grid-template-columns:1fr}.reminderForm .editorActions button{flex:1 1 auto}}
