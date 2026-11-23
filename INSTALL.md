@@ -1,45 +1,36 @@
-# RealVolt — Live Lead Funnel (Existing CRM)
+# RealVolt 046D — Connect named document slots to Transactions
 
-This is a **targeted replacement of the existing Lead Funnel page**, not a new funnel or a new SaaS project. The change does not touch other dashboard, CRM, website-builder, transaction, automation, or AI modules.
+The previous Fix 046 introduced app/staged-document-upload.tsx and CSS but the currently shown transaction page still uses the generic `deal-upload` input. The missing step is updating app/transactions.tsx to render the new component. This package contains a ready-to-upload app/transactions.tsx derived from the last RealVolt 044 source provided to this conversation, with Fix 046 integrated. It **has not** been verified against the latest live GitHub commit; compare it with your current version before replacing to avoid losing unrelated recent modifications.
 
-## Installation
+## Before uploading
 
-1. Back up your GitHub repository (branch `main`) before uploading anything.
-2. In `github.com/inderbains/crmsocial`, merge these files into the matching **existing folders**:
-   - `app/lead-funnel.tsx` (replace the existing page component, preserving any customizations newer than the supplied snapshot)
-   - `app/lead-funnel.module.css` (new)
-   - `lib/lead-funnel-analytics.mjs` (new)
-   - `lib/lead-funnel-analytics.d.mts` (new TypeScript declarations)
-   - `tests/lead-funnel-analytics.test.mjs` (new)
-3. **Do not** upload the ZIP itself as a GitHub file. **Do not** put the TSX/CSS files at the root. Do not delete any of your existing modules.
-4. Commit the changes and let Hostinger deploy with the existing `npm run build` command.
-5. Log in to RealVolt and open **CRM → Lead Funnel**. Verify the totals correspond to your actual CRM pipeline. Refresh and switch between **All time / Last 30 days / Last 90 days**.
-6. In Brokerage Settings, change your theme and return to the funnel: colours should follow the existing `--green` / `--theme-soft` variables automatically.
+- Make sure `app/staged-document-upload.tsx` and `app/staged-document-upload.module.css` are already committed in GitHub.
+- Compare the current `app/transactions.tsx` to this version if other work may have changed it.
+- Open GitHub > `crmsocial` > `app` > Add file > Upload files; upload **only** `transactions.tsx` from the `app/` folder inside this download. Confirm file will replace `app/transactions.tsx`, not appear at repository root. Commit.
+- Do **not** upload the ZIP itself to GitHub root. Do **not** upload README to `app`.
+- If GitHub refuses to overwrite existing file, use edit current file and make targeted changes in the instructions below. Avoid pasting only a partial file.
 
-## How the numbers work
+## What changed
 
-The data comes **directly from the current signed-in agent's existing Supabase tables** with row-level security and `count:'exact', head:true`. No new SQL, secrets, paid API, or OpenAI key is required.
+1. Import `StagedDocumentUpload` from `./staged-document-upload`.
+2. Add the `requiredReady` state and reset it when switching transaction files.
+3. Replace the single generic `deal-upload` input with `StagedDocumentUpload` just after the Attached documents heading.
+4. Require staged document readiness for Submit to Back Office.
+5. Preserve the existing attached document list, transaction actions, Back Office checks, and closing panel from Fix 044.
 
-- CRM leads: `crm_contacts` owned by signed-in user and contact types Buyer, Seller, Buyer & seller, Other (not agent or service-provider contacts).
-- Stage figures: the `crm_contacts.stage` values New, Contacted, Qualified, Active, Under contract, Closed, Lost.
-- Funnel top row is *all captured CRM leads, including Lost*. Lower funnel rows are contact counts whose **current stage is at or beyond** the named stage, excluding Lost.
-- `At stage` in the breakdown is the exclusive count at that current stage. `At or beyond` is a snapshot based on stage order, **not audited historical transitions**.
-- Property page views and contact clicks: `property_engagement.event_type` events; they can include bots and repeats and are **not matched to unique clients**.
-- Showing requests: `property_showing_requests`; confirmed/completed count is status Confirmed or Completed.
-- Closed: contacts **marked Closed in CRM**, not automatically certified closings from your transactions ledger.
-- The filter's date range applies to `created_at` for each data source; CRM stages describe the **current** stage of leads created in that range. This is not a historical close-rate cohort audit.
-- No fake offer numbers, Meta impressions, or invented website-to-client conversion percentages appear.
-- Data refreshes when the page loads, you change date range, or click **Refresh**. It does not live-stream between refreshes.
-- The visual taper indicates stage order, not relative band area. **Numbers are the data.**
+## Supabase diagnostic (READ ONLY)
 
-## Testing
+Run in Supabase SQL Editor:
 
-Run `node --test tests/lead-funnel-analytics.test.mjs` (four passing calculations tests in our prepared patch).
+```sql
+SELECT
+  to_regclass('public.deal_requirements') IS NOT NULL AS migration_006_checklist_present,
+  to_regclass('public.rv_compliance_templates') IS NOT NULL AS migration_044_templates_present,
+  to_regprocedure('public.rv_link_uploaded_compliance_doc(uuid,uuid,text,boolean)') IS NOT NULL AS migration_046_linker_present;
+```
 
-The new TypeScript/TSX files passed syntax parsing. A complete Next.js production build and live Supabase/Hostinger integration **were not verified here** because package installation timed out; test in staging first. Keep the original `app/lead-funnel.tsx` so you can roll back if your branch has newer changes.
+All three should be true. If any false, the application will not be able to retrieve/show document requirements. **Do not re-run migrations blindly.** Inspect existing schema/previous migrations in staging and apply only missing prerequisites in order. The notice in the screenshot mentions 006 and 044 specifically.
 
-## Tenant / brokerage notes
+## Validation
 
-The existing page accepts `userId` from the logged-in workspace, and queries with the browser's publishable Supabase client under existing RLS. Therefore counts are **for the signed-in agent only**, not an unauthorized global brokerage aggregate. A future brokerage-wide funnel requires a separately permission-checked aggregation. Brokerage theme CSS variables (`--green`, `--theme-soft`, `--primary-ink`) already change through `app/office-theme.tsx`.
-
-This patch does not migrate or delete any Supabase data.
+The Transactions component was checked for a single StagedDocumentUpload mount, absence of the old `deal-upload` input, gated Submit action, and TSX syntax. A full Next.js build on the current live branch has NOT been completed or verified.
