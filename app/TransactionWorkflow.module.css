@@ -11,3 +11,8 @@
 .closePrompt{background:#f6faf6;border:1px solid #cddfce;border-radius:12px;padding:18px;margin-top:16px}
 .closePrompt h3{margin-top:0;color:#1c4633}
 @media(max-width:760px){.steps{gap:5px}.step,.selected{flex-basis:115px;font-size:12px;padding:10px 8px}.body{padding:12px}}
+
+/* Fix 053: central agent identity shown on each opened transaction. */
+.assignedRealtor{display:flex;align-items:center;flex-wrap:wrap;gap:6px;margin:7px 0 2px;color:#1b4033;font-size:13px}
+.assignedRealtor b{font-weight:800}
+.assignedRealtor span{font-weight:600}

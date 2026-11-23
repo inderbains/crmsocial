@@ -25,6 +25,12 @@ export default function PersonalDates({userId,notify,brokerageHome=false,brokera
  const [entries,setEntries]=useState<Entry[]>([]),[dates,setDates]=useState<TxDate[]>([]),[notices,setNotices]=useState<Notice[]>([]),[addresses,setAddresses]=useState<Record<string,string>>({});
  const [tasks,setTasks]=useState<Task[]>([]),[clients,setClients]=useState<Client[]>([]),[notes,setNotes]=useState<ClientNote[]>([]);
  const [editing,setEditing]=useState<(Omit<Entry,'id'>&{id?:string})|null>(null),[busy,setBusy]=useState(false),[error,setError]=useState(''),[today,setToday]=useState(brokerageDay());
+ useEffect(()=>{
+  if(!editing)return;
+  const closeOnEscape=(e:KeyboardEvent)=>{if(e.key==='Escape'&&!busy)setEditing(null)};
+  window.addEventListener('keydown',closeOnEscape);
+  return()=>window.removeEventListener('keydown',closeOnEscape);
+ },[Boolean(editing),busy]);
  const [quote,setQuote]=useState(''),[quoteDraft,setQuoteDraft]=useState(''),[quoteEditing,setQuoteEditing]=useState(false);
  const [goal,setGoal]=useState(5),[goalDraft,setGoalDraft]=useState('5'),[goalEditing,setGoalEditing]=useState(false);
  const [salesCount,setSalesCount]=useState(0),[settingsBusy,setSettingsBusy]=useState(false),[settingsError,setSettingsError]=useState(''),[salesError,setSalesError]=useState('');
@@ -136,7 +142,7 @@ export default function PersonalDates({userId,notify,brokerageHome=false,brokera
   {key:'clients',label:'Clients',count:clientItems.filter(x=>x.unread).length,items:clientItems,empty:'No recent client activity.'},
   {key:'completed',label:'Completed',count:completedItems.length,items:completedItems,empty:'No completed reminders yet.'},
  ];
- return <section className={styles.personalCard} aria-label={brokerageHome?'Brokerage home workspace':'Agent home workspace'}>
+ return <><section className={styles.personalCard} aria-label={brokerageHome?'Brokerage home workspace':'Agent home workspace'}>
   <div className={styles.personalTopButton}><button className="btn primary" type="button" disabled={busy} onClick={()=>setEditing({title:'',event_date:today,notes:'',completed:false})}>+ Add reminder</button></div>
   <div className={styles.personalMain}>
    <div className={styles.personalLeft}>
@@ -158,6 +164,26 @@ export default function PersonalDates({userId,notify,brokerageHome=false,brokera
    </div>
    <div className={styles.personalRight}><SmartInbox037 tabs={tabs} ariaLabel={brokerageHome?'Brokerage home notification inbox':'Agent notification inbox'}/></div>
   </div>
-  {editing&&<form className={styles.editor} onSubmit={save}><div className={styles.editorGrid}><label>Reminder<input required maxLength={200} value={editing.title} onChange={e=>setEditing({...editing,title:e.target.value})}/></label><label>Date<input type="date" required value={editing.event_date} onChange={e=>setEditing({...editing,event_date:e.target.value})}/></label></div><label style={{marginTop:8}}>Notes<textarea rows={2} maxLength={4000} value={editing.notes} onChange={e=>setEditing({...editing,notes:e.target.value})}/></label><div className={styles.editorActions}><button type="submit" className="btn primary" disabled={busy}>Save</button><button type="button" className="btn" onClick={()=>setEditing(null)} disabled={busy}>Cancel</button>{editing.id&&<><button type="button" className="btn" disabled={busy} onClick={()=>void run(async()=>{const r=await db.from('agent_personal_dates').update({completed:!editing.completed}).eq('id',editing.id).eq('user_id',userId);if(r.error)throw r.error;setEditing(null)})}>{editing.completed?'Reopen':'Complete'}</button><button type="button" className="btn" disabled={busy} onClick={()=>{if(window.confirm('Delete this personal reminder?'))void run(async()=>{const r=await db.from('agent_personal_dates').delete().eq('id',editing.id).eq('user_id',userId);if(r.error)throw r.error;setEditing(null)})}}>Delete</button></>}</div></form>}
- </section>;
+ </section>
+ {editing&&<div className={styles.reminderOverlay} onMouseDown={e=>{if(e.target===e.currentTarget&&!busy)setEditing(null)}}>
+  <section className={styles.reminderModal} role="dialog" aria-modal="true" aria-labelledby="rv-reminder-dialog-title">
+   <div className={styles.reminderModalHead}>
+    <div><p className={styles.eyebrow}>PERSONAL WORKSPACE</p><h2 id="rv-reminder-dialog-title">{editing.id?'Edit reminder':'Add reminder'}</h2><p>Keep your follow-ups and important dates together.</p></div>
+    <button type="button" className={styles.reminderClose} onClick={()=>setEditing(null)} disabled={busy} aria-label="Close reminder popup">×</button>
+   </div>
+   <form className={styles.reminderForm} onSubmit={save}>
+    <div className={styles.editorGrid}>
+     <label htmlFor="rv-reminder-title">Reminder<input id="rv-reminder-title" autoFocus required maxLength={200} placeholder="e.g. Call buyer about financing" value={editing.title} onChange={e=>setEditing({...editing,title:e.target.value})}/></label>
+     <label htmlFor="rv-reminder-date">Date<input id="rv-reminder-date" type="date" required value={editing.event_date} onChange={e=>setEditing({...editing,event_date:e.target.value})}/></label>
+    </div>
+    <label htmlFor="rv-reminder-notes">Notes (optional)<textarea id="rv-reminder-notes" rows={3} maxLength={4000} placeholder="Add details or a follow-up plan…" value={editing.notes} onChange={e=>setEditing({...editing,notes:e.target.value})}/></label>
+    <div className={styles.editorActions}>
+     <button type="submit" className="btn primary" disabled={busy}>{busy?'Saving…':'Save reminder'}</button>
+     <button type="button" className="btn" onClick={()=>setEditing(null)} disabled={busy}>Cancel</button>
+     {editing.id&&<><button type="button" className="btn" disabled={busy} onClick={()=>void run(async()=>{const r=await db.from('agent_personal_dates').update({completed:!editing.completed}).eq('id',editing.id).eq('user_id',userId);if(r.error)throw r.error;setEditing(null)})}>{editing.completed?'Reopen reminder':'Mark completed'}</button><button type="button" className="btn" disabled={busy} onClick={()=>{if(window.confirm('Delete this personal reminder?'))void run(async()=>{const r=await db.from('agent_personal_dates').delete().eq('id',editing.id).eq('user_id',userId);if(r.error)throw r.error;setEditing(null)})}}>Delete</button></>}
+    </div>
+   </form>
+  </section>
+ </div>}
+ </>;
 }
