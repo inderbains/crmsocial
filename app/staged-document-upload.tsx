@@ -48,7 +48,14 @@ export default function StagedDocumentUpload({deal,docs,office,displayStatus,onS
  const [error,setError]=useState('');
  const [uploading,setUploading]=useState<UploadState|null>(null);
  const [refresh,setRefresh]=useState(0);
- const activePhases=useMemo<Phase[]>(()=>deal.kind==='Listing'?['listing']:office?phases.filter(p=>p!=='listing'):['offer','firm'],[deal.kind,office]);
+ // Do not show blank subject-removal/firm-sale requirements before the action is taken.
+ // The signed documents are collected in Transaction Actions; the checklist is visible
+ // afterwards for Back Office verification and the deal's audit record.
+ const activePhases=useMemo<Phase[]>(()=>{
+  if(deal.kind==='Listing')return ['listing'];
+  if(['Sold','Completed','Archived'].includes(deal.rv_stage||''))return office?['offer','firm','completion']:['offer','firm'];
+  return ['offer'];
+ },[deal.kind,deal.rv_stage,office]);
  const load=useCallback(async()=>{
   setLoading(true);
   try{
