@@ -27,6 +27,7 @@ const friendlyNames:Record<string,string>={
  'Signed subject removal / unconditional contract':'Signed Subject Removal / Unconditional Contract',
  'Title search':'Title Search',
  'Property Disclosure Statement (PDS)':'Property Disclosure Statement (PDS)',
+ 'Receipt of funds':'Receipt of Funds',
  'Trade record sheet':'Trade Record Sheet',
  'Sale report form':'Sale Report Form',
  'Deposit cheque copy / deposit receipt':'Deposit Cheque Copy / Receipt',

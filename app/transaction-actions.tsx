@@ -7,16 +7,19 @@ import {brokerageDay} from '../lib/listing-status';
 type DocumentRef={id:string;name:string};
 type ActionName='firm'|'extend_subject'|'collapse'|'terminate'|'extend_listing'|'extend_completion'|'complete'|'funds'|'archive'|'missing';
 type ActionOption={id:ActionName;label:string};
-type FirmKey='signed'|'title'|'pds'|'cheque';
+type FirmKey='signed'|'title'|'pds'|'cheque'|'trade'|'saleReport'|'receipt';
 type FirmFiles=Record<FirmKey,File|null>;
-const EMPTY_FIRM:FirmFiles={signed:null,title:null,pds:null,cheque:null};
+const EMPTY_FIRM:FirmFiles={signed:null,title:null,pds:null,cheque:null,trade:null,saleReport:null,receipt:null};
 const MAX_BYTES=20*1024*1024;
 const allowedExtensions=/\.(pdf|jpg|jpeg|png|doc|docx|xls|xlsx|txt)$/i;
-const fields:{key:FirmKey;label:string;template:string;accept:string;pdfOnly?:boolean}[]=[
+const fields:{key:FirmKey;label:string;template:string;accept:string;pdfOnly?:boolean;representation?:'listing'|'selling'}[]=[
  {key:'signed',label:'Signed Subject Removal (PDF)',template:'Signed subject removal / unconditional contract',accept:'.pdf,application/pdf',pdfOnly:true},
  {key:'title',label:'Title Search',template:'Title search',accept:'.pdf,.jpg,.jpeg,.png,.doc,.docx,.xls,.xlsx,.txt'},
  {key:'pds',label:'Property Disclosure Statement (PDS)',template:'Property Disclosure Statement (PDS)',accept:'.pdf,.jpg,.jpeg,.png,.doc,.docx,.xls,.xlsx,.txt'},
  {key:'cheque',label:'Deposit Cheque Copy / Receipt',template:'Deposit cheque copy / deposit receipt',accept:'.pdf,.jpg,.jpeg,.png,.doc,.docx,.xls,.xlsx,.txt'},
+ {key:'trade',label:'Trade Record Sheet',template:'Trade record sheet',accept:'.pdf,.jpg,.jpeg,.png,.doc,.docx,.xls,.xlsx,.txt'},
+ {key:'saleReport',label:'Sale Report Form',template:'Sale report form',representation:'listing',accept:'.pdf,.jpg,.jpeg,.png,.doc,.docx,.xls,.xlsx,.txt'},
+ {key:'receipt',label:'Receipt of Funds',template:'Receipt of funds',representation:'selling',accept:'.pdf,.jpg,.jpeg,.png,.doc,.docx,.xls,.xlsx,.txt'},
 ];
 const ADDENDUM_LABEL='Subject extension or other addendum (if applicable)';
 const labels:Partial<Record<ActionName,string>>={
@@ -25,7 +28,7 @@ const labels:Partial<Record<ActionName,string>>={
 };
 
 export default function TransactionActions({deal,docs,office,linked,notify,reload,onConvert,onEdit}:{
- deal:{id:string;kind:string;rv_stage:string|null;review_status:string;rv_completed_date:string|null;rv_funds_verified:boolean;updated_at:string};
+ deal:{id:string;kind:string;representation:'listing'|'selling';rv_stage:string|null;review_status:string;rv_completed_date:string|null;rv_funds_verified:boolean;updated_at:string};
  docs:DocumentRef[];office:boolean;linked:boolean;notify:(s:string)=>void;
  reload:()=>Promise<void>;onConvert:()=>void;onEdit:()=>void;
 }){
@@ -72,11 +75,12 @@ export default function TransactionActions({deal,docs,office,linked,notify,reloa
  if(office&&firm&&approved)options.push({id:'complete',label:'Confirm legal completion'});
  if(office&&complete){if(!deal.rv_funds_verified)options.push({id:'funds',label:'Verify commission receipt'});options.push({id:'archive',label:'Close / archive file'})}
  if(office&&deal.rv_stage!=='Collapsed'&&['Submitted','Approved'].includes(deal.review_status))options.push({id:'missing',label:'Request missing documents'});
+ const firmFields=fields.filter(field=>!field.representation||field.representation===deal.representation);
  const needsPDF=['terminate','extend_listing','extend_completion','complete'].includes(action);
  const needsDate=['firm','extend_subject','terminate','extend_listing','extend_completion','complete'].includes(action);
  const needsNote=['terminate','funds','missing'].includes(action);
  const availableDocs=[...docs,...newDocs.filter(n=>!docs.some(d=>d.id===n.id))];
- const missingFirm=fields.some(f=>!firmFiles[f.key]&&!firmSaved[f.key]);
+ const missingFirm=firmFields.some(f=>!firmFiles[f.key]&&!firmSaved[f.key]);
 
  async function registerFile(file:File,template?:string,additional=false){
   if(file.size<1||file.size>MAX_BYTES)throw new Error(`${file.name}: maximum 20 MB per file.`);
@@ -106,7 +110,7 @@ export default function TransactionActions({deal,docs,office,linked,notify,reloa
  async function submit(){
   if(!action)return;
   if(needsPDF&&!document){notify('Upload or select the signed PDF for this action.');return}
-  if(action==='firm'&&missingFirm){notify('Upload Subject Removal, Title Search, PDS and Deposit Cheque Copy before marking firm sold.');return}
+  if(action==='firm'&&missingFirm){notify(deal.representation==='listing'?'Required: Subject Removal, Title Search, PDS, Deposit Cheque Copy, Trade Record Sheet and Sale Report Form.':'Required: Subject Removal, Title Search, PDS, Deposit Cheque Copy, Trade Record Sheet and Receipt of Funds.');return}
   if(action==='extend_subject'&&!extensionFile&&!extensionSaved){notify('Select the signed subject extension PDF.');return}
   if(action==='extend_subject'&&(!date||date.length!==10)){notify('Enter the revised subject removal date.');return}
   if(action==='collapse'&&!window.confirm('Close this offer as COLLAPSED? No document is required. The sale will be locked and excluded from firm sales.'))return;
@@ -116,7 +120,7 @@ export default function TransactionActions({deal,docs,office,linked,notify,reloa
    if(action==='firm'){
     // Keep uploaded IDs across retries if a later file or the database action fails.
     const persisted={...firmSaved};
-    for(const field of fields){
+    for(const field of firmFields){
      if(persisted[field.key])continue;
      const file=firmFiles[field.key];if(!file)throw new Error(field.label+' is required.');
      if(field.pdfOnly&&(!/\.pdf$/i.test(file.name)||(file.type&&file.type!=='application/pdf')))throw new Error('Subject Removal must be a signed PDF.');
@@ -174,7 +178,8 @@ export default function TransactionActions({deal,docs,office,linked,notify,reloa
    {needsDate&&<div className="field"><label htmlFor="rv-action-date">{action==='firm'?'Actual date subjects were removed':action==='extend_subject'?'New subject removal / extension date':action==='complete'?'Actual legal completion date':'Effective / revised date'}</label><input id="rv-action-date" type="date" required value={date} onChange={e=>setDate(e.target.value)} disabled={busy}/></div>}
    {action==='firm'&&<div style={{display:'grid',gap:13}}>
     <p className="hint">Attach these documents when marking the sale firm. They will appear in the compliance file after submission. Each file may be up to 20 MB.</p>
-    {fields.map(field=><div className="field" key={field.key}>
+    <p className="hint"><strong>{deal.representation==='listing'?'Our listing — seller-side sale':'Buyer-side sale'}</strong> · All fields below are required for this transaction side.</p>
+    {firmFields.map(field=><div className="field" key={field.key}>
      <label htmlFor={'rv-firm-'+field.key}>{field.label} <strong style={{color:'#a34422'}}>(Required)</strong></label>
      <input id={'rv-firm-'+field.key} type="file" accept={field.accept} required={!firmSaved[field.key]} disabled={busy||Boolean(firmSaved[field.key])} onChange={e=>{
       const file=e.target.files?.[0]||null;setFirmFiles(v=>({...v,[field.key]:file}));setFirmSaved(v=>({...v,[field.key]:undefined}));
