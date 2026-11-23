@@ -13,13 +13,13 @@ const EMPTY_FIRM:FirmFiles={signed:null,title:null,pds:null,cheque:null,trade:nu
 const MAX_BYTES=20*1024*1024;
 const allowedExtensions=/\.(pdf|jpg|jpeg|png|doc|docx|xls|xlsx|txt)$/i;
 const fields:{key:FirmKey;label:string;template:string;accept:string;pdfOnly?:boolean;representation?:'listing'|'selling'}[]=[
- {key:'signed',label:'Signed Subject Removal (PDF)',template:'Signed subject removal / unconditional contract',accept:'.pdf,application/pdf',pdfOnly:true},
+ {key:'signed',label:'Signed Subject Removal / Unconditional Contract (PDF)',template:'Signed subject removal / unconditional contract',accept:'.pdf,application/pdf',pdfOnly:true},
  {key:'title',label:'Title Search',template:'Title search',accept:'.pdf,.jpg,.jpeg,.png,.doc,.docx,.xls,.xlsx,.txt'},
  {key:'pds',label:'Property Disclosure Statement (PDS)',template:'Property Disclosure Statement (PDS)',accept:'.pdf,.jpg,.jpeg,.png,.doc,.docx,.xls,.xlsx,.txt'},
  {key:'cheque',label:'Deposit Cheque Copy / Receipt',template:'Deposit cheque copy / deposit receipt',accept:'.pdf,.jpg,.jpeg,.png,.doc,.docx,.xls,.xlsx,.txt'},
  {key:'trade',label:'Trade Record Sheet',template:'Trade record sheet',accept:'.pdf,.jpg,.jpeg,.png,.doc,.docx,.xls,.xlsx,.txt'},
- {key:'saleReport',label:'Sale Report Form',template:'Sale report form',representation:'listing',accept:'.pdf,.jpg,.jpeg,.png,.doc,.docx,.xls,.xlsx,.txt'},
- {key:'receipt',label:'Receipt of Funds',template:'Receipt of funds',representation:'selling',accept:'.pdf,.jpg,.jpeg,.png,.doc,.docx,.xls,.xlsx,.txt'},
+ {key:'saleReport',label:'Sale Report Form',template:'Sale report form',accept:'.pdf,.jpg,.jpeg,.png,.doc,.docx,.xls,.xlsx,.txt'},
+ {key:'receipt',label:'Receipt of Funds',template:'Receipt of funds',accept:'.pdf,.jpg,.jpeg,.png,.doc,.docx,.xls,.xlsx,.txt'},
 ];
 const ADDENDUM_LABEL='Subject extension or other addendum (if applicable)';
 const labels:Partial<Record<ActionName,string>>={
@@ -27,13 +27,14 @@ const labels:Partial<Record<ActionName,string>>={
  terminate:'Signed listing termination',extend_listing:'Signed listing extension'
 };
 
-export default function TransactionActions({deal,docs,office,linked,notify,reload,onConvert,onEdit}:{
+export default function TransactionActions({deal,docs,agentName,office,linked,notify,reload,onConvert,onEdit}:{
  deal:{id:string;kind:string;representation:'listing'|'selling';rv_stage:string|null;review_status:string;rv_completed_date:string|null;rv_funds_verified:boolean;updated_at:string};
- docs:DocumentRef[];office:boolean;linked:boolean;notify:(s:string)=>void;
+ docs:DocumentRef[];agentName?:string;office:boolean;linked:boolean;notify:(s:string)=>void;
  reload:()=>Promise<void>;onConvert:()=>void;onEdit:()=>void;
 }){
  const db=getSupabase()!;
  const [action,setAction]=useState<ActionName|''>('');
+ const [saleOutcome,setSaleOutcome]=useState<'subject_removed'|'direct_sold'>('subject_removed');
  const [date,setDate]=useState(brokerageDay());
  const [document,setDocument]=useState('');
  const [newDocs,setNewDocs]=useState<DocumentRef[]>([]);
@@ -47,12 +48,12 @@ export default function TransactionActions({deal,docs,office,linked,notify,reloa
  const [busy,setBusy]=useState(false);
  const [savingLabel,setSavingLabel]=useState('');
  function resetAction(){
-  setAction('');setDate(brokerageDay());setDocument('');setNewDocs([]);setNote('');
+  setAction('');setSaleOutcome('subject_removed');setDate(brokerageDay());setSaleOutcome('subject_removed');setDocument('');setNewDocs([]);setNote('');
   setFirmFiles({...EMPTY_FIRM});setFirmSaved({});setAddendums([]);setAddendumsSaved({});
   setExtensionFile(null);setExtensionSaved('');
  }
  useEffect(()=>{
-  setAction('');setDocument('');setNewDocs([]);setNote('');setDate(brokerageDay());
+  setAction('');setSaleOutcome('subject_removed');setDocument('');setNewDocs([]);setNote('');setDate(brokerageDay());
   setFirmFiles({...EMPTY_FIRM});setFirmSaved({});setAddendums([]);setAddendumsSaved({});
   setExtensionFile(null);setExtensionSaved('');
  },[deal.id]);
@@ -63,10 +64,10 @@ export default function TransactionActions({deal,docs,office,linked,notify,reloa
  const firm=deal.rv_stage==='Sold',complete=deal.rv_stage==='Completed';
  const options:ActionOption[]=[];
  if(!office&&approved&&!sale&&!linked)options.push({id:'terminate',label:'Terminate listing'},{id:'extend_listing',label:'Extend listing'});
- if(!office&&conditional&&['Draft','Submitted','Changes requested','Approved'].includes(deal.review_status)){
+ if(!office&&conditional&&['Draft','Changes requested','Approved'].includes(deal.review_status)){
   // These are the three possible outcomes of an accepted offer, independent of Back Office approval.
+  options.push({id:'firm',label:'Remove subjects / direct sold'});
   options.push(
-   {id:'firm',label:'Remove subjects / mark firm sold'},
    {id:'extend_subject',label:'Extend subjects'},
    {id:'collapse',label:'Offer collapsed'}
   );
@@ -79,7 +80,7 @@ export default function TransactionActions({deal,docs,office,linked,notify,reloa
  // the select's onChange: it also clears the controlled value and can be
  // confusing when a transaction view refreshes during a document upload.
  function chooseAction(next:ActionName|''){
-  setDate(brokerageDay());setDocument('');setNewDocs([]);setNote('');
+  setDate(brokerageDay());setSaleOutcome('subject_removed');setDocument('');setNewDocs([]);setNote('');
   setFirmFiles({...EMPTY_FIRM});setFirmSaved({});setAddendums([]);setAddendumsSaved({});
   setExtensionFile(null);setExtensionSaved('');
   setAction(next);
@@ -119,7 +120,7 @@ export default function TransactionActions({deal,docs,office,linked,notify,reloa
  async function submit(){
   if(!action)return;
   if(needsPDF&&!document){notify('Upload or select the signed PDF for this action.');return}
-  if(action==='firm'&&missingFirm){notify(deal.representation==='listing'?'Required: Subject Removal, Title Search, PDS, Deposit Cheque Copy, Trade Record Sheet and Sale Report Form.':'Required: Subject Removal, Title Search, PDS, Deposit Cheque Copy, Trade Record Sheet and Receipt of Funds.');return}
+  if(action==='firm'&&missingFirm){notify(deal.representation==='listing'?'Required: Signed subject removal or unconditional contract, Title Search, PDS, Deposit Cheque Copy, Trade Record Sheet, Sale Report Form and Receipt of Funds.':'Required: Signed subject removal or unconditional contract, Title Search, PDS, Deposit Cheque Copy, Trade Record Sheet, Sale Report Form and Receipt of Funds.');return}
   if(action==='extend_subject'&&!extensionFile&&!extensionSaved){notify('Select the signed subject extension PDF.');return}
   if(action==='extend_subject'&&(!date||date.length!==10)){notify('Enter the revised subject removal date.');return}
   if(action==='collapse'&&!window.confirm('Close this offer as COLLAPSED? No document is required. The sale will be locked and excluded from firm sales.'))return;
@@ -132,7 +133,7 @@ export default function TransactionActions({deal,docs,office,linked,notify,reloa
     for(const field of firmFields){
      if(persisted[field.key])continue;
      const file=firmFiles[field.key];if(!file)throw new Error(field.label+' is required.');
-     if(field.pdfOnly&&(!/\.pdf$/i.test(file.name)||(file.type&&file.type!=='application/pdf')))throw new Error('Subject Removal must be a signed PDF.');
+     if(field.pdfOnly&&(!/\.pdf$/i.test(file.name)||(file.type&&file.type!=='application/pdf')))throw new Error('Upload the signed subject removal or unconditional accepted contract as a PDF.');
      setSavingLabel('Uploading '+field.label+'…');
      const id=await registerFile(file,field.template);
      persisted[field.key]=id;setFirmSaved({...persisted});
@@ -154,12 +155,14 @@ export default function TransactionActions({deal,docs,office,linked,notify,reloa
     }else selectedDocument=extensionSaved;
    }
    setSavingLabel('Recording transaction action…');
-   const response=action==='archive'
+   const response=action==='extend_subject'||action==='collapse'
+    ?await db.rpc('rv056_offer_update',{p_deal:deal.id,p_action:action,p_date:action==='extend_subject'?date:null,p_document:action==='extend_subject'?selectedDocument||null:null})
+    :action==='archive'
     ?await db.rpc('rv_close_compliant_file',{p_deal:deal.id})
-    :await db.rpc('rv_tx_action',{p_deal:deal.id,p_action:action,p_date:needsDate?date:null,p_document:action==='collapse'?null:selectedDocument||null,p_note:note});
+    :await db.rpc('rv_tx_action',{p_deal:deal.id,p_action:action,p_date:needsDate?date:null,p_document:action==='collapse'?null:selectedDocument||null,p_note:action==='firm'?(saleOutcome==='direct_sold'?'direct_sold_no_subjects':'subject_removed'):note});
    if(response.error)throw response.error;
    resetAction();await reload();
-   notify(action==='collapse'?'Sale collapsed and file closed. No document required.':action==='firm'?'Firm sale submitted with required documents. Complete lawyer and commission details next.':action==='extend_subject'?'Subject extension date and PDF submitted for review.':'Transaction updated.');
+   notify(action==='collapse'?'Offer collapsed. The linked listing is active again. Back Office notified; no compliance review required.':action==='firm'?'Firm sale submitted to Back Office. Save the lawyer, commission, GST and deposit details before the manager approves.':action==='extend_subject'?'Subject extension recorded. Back Office notified; no compliance approval needed.':'Transaction updated.');
   }catch(err){notify((err as Error).message)}
   finally{setBusy(false);setSavingLabel('')}
  }
@@ -169,12 +172,12 @@ export default function TransactionActions({deal,docs,office,linked,notify,reloa
   catch(err){notify((err as Error).message)}finally{setBusy(false)}
  }
  return <section aria-label="Transaction actions" style={{margin:'20px 0'}}>
-  <h3 style={{fontSize:17,margin:'0 0 10px'}}>Transaction actions</h3>
+  <h3 style={{fontSize:17,margin:'0 0 10px'}}>Transaction actions</h3><p className="hint">Assigned Realtor: {agentName||'Agent profile name unavailable'}</p>
   {conditional&&!office&&<p className="hint">Choose the outcome of the accepted offer. Required files are entered here only when that action is selected. Lawyer and commission details come after the sale becomes firm.</p>}
   {deal.rv_stage==='Collapsed'&&<div className="notice">This offer is collapsed and closed. Its record remains for audit, but no additional transaction or commission actions are permitted.</div>}
   <div className="actions">
    {!office&&approved&&!sale&&!linked&&<button type="button" className="btn primary" disabled={busy} onClick={onConvert}>Accepted offer / create sale</button>}
-   {!office&&approved&&conditional&&<button type="button" className="btn" disabled={busy} onClick={()=>void reopen()}>Update accepted-offer details</button>}
+   
    {options.length>0&&<label style={{display:'inline-flex',alignItems:'center',gap:8,fontSize:13,fontWeight:700}}>File action
     <select aria-label="Select transaction action" value={action} disabled={busy} onChange={e=>chooseAction(e.currentTarget.value as ActionName|'')} style={{minWidth:240,maxWidth:'100%',padding:'9px 12px',borderRadius:8,border:'1px solid #cbd9cc',background:'#fff',position:'relative',zIndex:1,cursor:'pointer',pointerEvents:'auto'}}>
      <option value="">Choose action…</option>{options.map(o=><option key={o.id} value={o.id}>{o.label}</option>)}
@@ -184,8 +187,8 @@ export default function TransactionActions({deal,docs,office,linked,notify,reloa
   {complete&&<p>Legal completion: {deal.rv_completed_date} · {deal.rv_funds_verified?'Commission receipt verified':'Awaiting verified commission receipt'}. Back Office → Agent Payments handles payout authorization.</p>}
   {action&&<form className="panel" style={{marginTop:12}} onSubmit={e=>{e.preventDefault();void submit()}}>
    <h3>{options.find(o=>o.id===action)?.label}</h3>
-   {needsDate&&<div className="field"><label htmlFor="rv-action-date">{action==='firm'?'Actual date subjects were removed':action==='extend_subject'?'New subject removal / extension date':action==='complete'?'Actual legal completion date':'Effective / revised date'}</label><input id="rv-action-date" type="date" required value={date} onChange={e=>setDate(e.target.value)} disabled={busy}/></div>}
-   {action==='firm'&&<div style={{display:'grid',gap:13}}>
+   {needsDate&&<div className="field"><label htmlFor="rv-action-date">{action==='firm'?(saleOutcome==='direct_sold'?'Date the unconditional offer became firm':'Actual date subjects were removed'):action==='extend_subject'?'New subject removal / extension date':action==='complete'?'Actual legal completion date':'Effective / revised date'}</label><input id="rv-action-date" type="date" required value={date} onChange={e=>setDate(e.target.value)} disabled={busy}/></div>}
+   {action==='firm'&&<div style={{display:'grid',gap:13}}><fieldset style={{border:'1px solid #cbd9cc',padding:12,borderRadius:8}}><legend>How did this offer become firm?</legend><label style={{display:'block',marginBottom:8}}><input style={{width:'auto',marginRight:8}} type="radio" name="sale-outcome" checked={saleOutcome==='subject_removed'} onChange={()=>setSaleOutcome('subject_removed')} disabled={busy}/>Subjects removed</label><label style={{display:'block'}}><input style={{width:'auto',marginRight:8}} type="radio" name="sale-outcome" checked={saleOutcome==='direct_sold'} onChange={()=>setSaleOutcome('direct_sold')} disabled={busy}/>Direct sold — unconditional offer, no subjects</label><p className="hint">For a direct sale, attach the signed unconditional Contract of Purchase and Sale in the first document slot instead of a subject-removal notice.</p></fieldset>
     <p className="hint">Attach these documents when marking the sale firm. They will appear in the compliance file after submission. Each file may be up to 20 MB.</p>
     <p className="hint"><strong>{deal.representation==='listing'?'Our listing — seller-side sale':'Buyer-side sale'}</strong> · All fields below are required for this transaction side.</p>
     {firmFields.map(field=><div className="field" key={field.key}>
@@ -214,7 +217,7 @@ export default function TransactionActions({deal,docs,office,linked,notify,reloa
    </div>}
    {needsNote&&<div className="field"><label htmlFor="rv-action-note">{action==='funds'?'Verified bank / receipt reference':action==='missing'?'Missing documents and instructions':'Termination reason'}</label><textarea id="rv-action-note" required value={note} onChange={e=>setNote(e.target.value)}/></div>}
    {action==='collapse'&&<p className="hint">No PDF, date, or other document is required. Confirming will mark the offer collapsed, close the sale file and preserve its audit history.</p>}
-   {action==='firm'&&<p className="hint">After confirmation, enter the lawyer contacts, commission and deposit information in the firm-sale file. Back Office will verify the uploaded documents.</p>}
+   {action==='firm'&&<p className="hint">Submitting this stage automatically sends it to Back Office review. The agent must then save the lawyer contacts, commission (GST calculated from the saved rate) and deposit holder/amount. Back Office approves only after verifying the documents and those details. A deposit held by your brokerage must be reconciled in Trust & Bank.</p>}
    {action==='funds'&&<p className="hint">Only confirm after the full commission has cleared. This action does not move money.</p>}
    {savingLabel&&<p role="status" className="hint">{savingLabel}</p>}
    <div className="actions"><button className="btn primary" disabled={busy||(needsPDF&&!document)||(action==='firm'&&missingFirm)||(action==='extend_subject'&&!extensionFile&&!extensionSaved)}>{busy?'Working…':action==='collapse'?'Confirm collapsed / close file':action==='firm'?'Submit firm sale & documents':action==='extend_subject'?'Confirm subject extension':'Confirm '+options.find(o=>o.id===action)?.label.toLowerCase()}</button><button className="btn" type="button" disabled={busy} onClick={resetAction}>Cancel</button></div>

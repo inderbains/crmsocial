@@ -59,7 +59,7 @@ export default function BackOfficeDashboard({userId,brokerageName,deals,requirem
  const reviewList=[...submissions.filter(d=>!freshIds.has(d.id)),...needsDocs.filter(d=>d.review_status!=='Submitted')];
  const upcoming=summary.filter(d=>d.next_date&&d.next_date>=today&&d.review_status!=='Draft');
  const uniqueNotices=notices.filter((x,i,arr)=>arr.findIndex(a=>a.deal_id===x.deal_id&&a.message===x.message)===i);
- const openDeal=(id:string)=>window.dispatchEvent(new CustomEvent('realvolt:open-transaction',{detail:{id,office:true}}));
+ const openDeal=(id:string)=>window.dispatchEvent(new CustomEvent('realvolt:open-transaction',{detail:{id,office:true,focus:merged.find(d=>d.id===id)?.review_status==='Submitted'?'compliance':undefined}}));
  async function openNotice(n:Notice){if(!n.read_at){const r=await db.from('rv_transaction_notifications').update({read_at:new Date().toISOString()}).eq('id',n.id).eq('recipient_id',sessionUserId);if(!r.error)setNotices(a=>a.map(x=>x.id===n.id?{...x,read_at:new Date().toISOString()}:x))}openDeal(n.deal_id)}
  const fileItems:InboxItem[]=freshSubmissions.map(d=>({id:'submitted-'+d.id,title:`${d.kind==='Sale'?'Sale':'Listing'} submitted`,detail:d.address||'Transaction',unread:true,onOpen:()=>openDeal(d.id)}));
  const reviewItems:InboxItem[]=reviewList.map(d=>({id:'review-'+d.id,title:'Documents need verification',detail:d.address||'Transaction',onOpen:()=>openDeal(d.id)}));
