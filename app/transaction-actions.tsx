@@ -60,9 +60,13 @@ export default function TransactionActions({deal,docs,office,linked,notify,reloa
  const firm=deal.rv_stage==='Sold',complete=deal.rv_stage==='Completed';
  const options:ActionOption[]=[];
  if(!office&&approved&&!sale&&!linked)options.push({id:'terminate',label:'Terminate listing'},{id:'extend_listing',label:'Extend listing'});
- if(!office&&conditional){
-  if(['Approved','Draft','Changes requested'].includes(deal.review_status))options.push({id:'firm',label:'Remove subjects / mark firm sold'});
-  if(approved)options.push({id:'extend_subject',label:'Extend subjects'},{id:'collapse',label:'Offer collapsed'});
+ if(!office&&conditional&&['Draft','Submitted','Changes requested','Approved'].includes(deal.review_status)){
+  // These are the three possible outcomes of an accepted offer, independent of Back Office approval.
+  options.push(
+   {id:'firm',label:'Remove subjects / mark firm sold'},
+   {id:'extend_subject',label:'Extend subjects'},
+   {id:'collapse',label:'Offer collapsed'}
+  );
  }
  if(!office&&firm&&approved)options.push({id:'extend_completion',label:'Extend completion'});
  if(office&&firm&&approved)options.push({id:'complete',label:'Confirm legal completion'});

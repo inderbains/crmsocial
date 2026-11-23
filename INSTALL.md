@@ -1,36 +1,24 @@
-# RealVolt 046D — Connect named document slots to Transactions
+# RealVolt Fix 049 — All 3 options in File Action dropdown
 
-The previous Fix 046 introduced app/staged-document-upload.tsx and CSS but the currently shown transaction page still uses the generic `deal-upload` input. The missing step is updating app/transactions.tsx to render the new component. This package contains a ready-to-upload app/transactions.tsx derived from the last RealVolt 044 source provided to this conversation, with Fix 046 integrated. It **has not** been verified against the latest live GitHub commit; compare it with your current version before replacing to avoid losing unrelated recent modifications.
+**Cause:** Fix 048 shows `Extend subjects` and `Offer collapsed` only if Back Office review is already `Approved`. The SQL RPC applies the same restriction. On Draft or Changes requested accepted offers, only `Remove subjects / mark firm sold` appears.
 
-## Before uploading
+## New behavior
+- **Remove subjects / mark firm sold** — subject removal date and four required document uploads (Subject Removal PDF, Title Search, PDS, Deposit Cheque Copy), plus optional addendums (multiple files).
+- **Extend subjects** — new subject date and signed extension PDF.
+- **Offer collapsed** — confirm/close, **no documents**.
+- The same dropdown is available when an accepted-offer file is Draft, Submitted, Changes requested or Approved. Actual action updates are audit logged and sent to the office (subject extensions and collapsed offers), subject to agent ownership and the transaction still being conditional. Completion extensions remain restricted to an approved firm sale.
+- The post-firm lawyer/commission form and other transaction features are unchanged.
 
-- Make sure `app/staged-document-upload.tsx` and `app/staged-document-upload.module.css` are already committed in GitHub.
-- Compare the current `app/transactions.tsx` to this version if other work may have changed it.
-- Open GitHub > `crmsocial` > `app` > Add file > Upload files; upload **only** `transactions.tsx` from the `app/` folder inside this download. Confirm file will replace `app/transactions.tsx`, not appear at repository root. Commit.
-- Do **not** upload the ZIP itself to GitHub root. Do **not** upload README to `app`.
-- If GitHub refuses to overwrite existing file, use edit current file and make targeted changes in the instructions below. Avoid pasting only a partial file.
+## Installation: exactly TWO items
+1. **SQL:** Back up your Supabase database. In **SQL Editor → New query**, paste ALL of `supabase/049_accepted_offer_all_actions.sql` and click Run once. The file consists of one complete `DO` statement; never highlight or execute a fragment. Confirm Success. It replaces only `public.rv_tx_action`, retaining the Fix 048 mandatory firm documents and optional no-document collapse.
+2. **GitHub:** Go to `github.com/inderbains/crmsocial/tree/main/app`; **replace** `app/transaction-actions.tsx` with the file in this ZIP. Do NOT upload into the repository root. Leave `transactions.tsx`, `staged-document-upload.tsx` and other files unchanged.
+3. After Hostinger builds, open an *Accepted offer* as an agent and confirm the dropdown contains all three. Use separate test transactions to test each outcome; collapsing closes the file.
 
-## What changed
+## Prerequisites
+Assumes Fix 048 application files and SQL 047/048 are already installed. Do not rerun prior SQL migrations.
 
-1. Import `StagedDocumentUpload` from `./staged-document-upload`.
-2. Add the `requiredReady` state and reset it when switching transaction files.
-3. Replace the single generic `deal-upload` input with `StagedDocumentUpload` just after the Attached documents heading.
-4. Require staged document readiness for Submit to Back Office.
-5. Preserve the existing attached document list, transaction actions, Back Office checks, and closing panel from Fix 044.
+## Verification
+TSX parsed with TypeScript and 7 targeted tests passed. SQL statement boundaries checked. **Not executed against a live database; full Hostinger/Next.js build not performed.**
 
-## Supabase diagnostic (READ ONLY)
-
-Run in Supabase SQL Editor:
-
-```sql
-SELECT
-  to_regclass('public.deal_requirements') IS NOT NULL AS migration_006_checklist_present,
-  to_regclass('public.rv_compliance_templates') IS NOT NULL AS migration_044_templates_present,
-  to_regprocedure('public.rv_link_uploaded_compliance_doc(uuid,uuid,text,boolean)') IS NOT NULL AS migration_046_linker_present;
-```
-
-All three should be true. If any false, the application will not be able to retrieve/show document requirements. **Do not re-run migrations blindly.** Inspect existing schema/previous migrations in staging and apply only missing prerequisites in order. The notice in the screenshot mentions 006 and 044 specifically.
-
-## Validation
-
-The Transactions component was checked for a single StagedDocumentUpload mount, absence of the old `deal-upload` input, gated Submit action, and TSX syntax. A full Next.js build on the current live branch has NOT been completed or verified.
+## Safety
+The SQL remains scoped to the signed-in agent's brokerage and file. Test in staging before production. The office receives notice of a collapsed sale or subject extension; documents remain subject to secure-storage and RLS policies.
