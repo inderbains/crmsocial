@@ -84,10 +84,13 @@ export default function StagedDocumentUpload({deal,docs,agentName,office,display
   return !!r&&(!!r.document_id||!!r.rv_waived);
  });
  useEffect(()=>{onReadyChange?.(ready)},[ready,onReadyChange]);
- const writable=(office?deal.review_status!=='Draft':deal.review_status!=='Submitted')&&!['Archived','Collapsed'].includes(deal.rv_stage||'')&&!(deal.kind==='Listing'&&['Expired','Terminated','Sold'].includes(displayStatus||''));
+ // Brokerage reviewers may inspect submitted agent documents but cannot upload or
+ // replace them. The brokerage's own completion documents remain available later.
+ const writable=(!office&&deal.review_status!=='Submitted')&&!['Archived','Collapsed'].includes(deal.rv_stage||'')&&!(deal.kind==='Listing'&&['Expired','Terminated','Sold'].includes(displayStatus||''));
+ const officeMayUploadCompletion=office&&deal.rv_stage==='Completed'&&deal.review_status==='Approved';
  async function upload(event:ChangeEvent<HTMLInputElement>,t:Template){
   const files=Array.from(event.target.files||[]);event.target.value='';if(!files.length)return;
-  if(!writable){notify('This file is locked for review. Ask Back Office to request changes.');return}
+  if(!(writable||(officeMayUploadCompletion&&t.phase==='completion'))){notify('Only the Realtor may replace submitted documents. Back Office should request changes.');return}
   setUploading({key:t.id,progress:true});
   try{
    const auth=await db.auth.getUser();if(auth.error||!auth.data.user)throw new Error('Your sign-in session has expired.');
@@ -127,7 +130,8 @@ export default function StagedDocumentUpload({deal,docs,agentName,office,display
     const added=requirements.filter(x=>x.label.startsWith(t.label+' — additional '));
     const verified=!!r?.verified, waived=!!r?.rv_waived;
     const busy=uploading!==null;
-    const disabled=busy||!writable||(!isAddendum(t.label)&&(verified||waived));
+    const canUpload=office?officeMayUploadCompletion&&phase==='completion':writable;
+    const disabled=busy||!canUpload||(!isAddendum(t.label)&&(verified||waived));
     return <div key={t.id} className={styles.item}>
      <div className={styles.itemLabel}><strong>{friendlyNames[t.label]||t.label}</strong><span className={t.required?styles.required:styles.optional}>{t.required?'Required':'Optional'}</span></div>
      <div className={styles.itemStatus}>{verified?'Verified by Back Office':waived?'Marked not applicable':f?`Uploaded: ${f.name} · Awaiting verification`:'Not uploaded'}{added.length>0?` · ${added.length} additional attachment(s)`:''}</div>
@@ -142,6 +146,7 @@ export default function StagedDocumentUpload({deal,docs,agentName,office,display
  }
  return <div className={styles.root}>
   <div className={styles.title}><h3>Upload by document type</h3><span>Realtor: {agentName||'Agent profile name unavailable'}</span><span>20 MB maximum per file</span></div>
+  {office&&<p className={styles.helper}>Agent-stage documents are read-only in Back Office. Open and approve the submitted file, or request changes from the Realtor. Completion documents may be added by authorized Back Office staff after completion.</p>}
   {loading&&<p className={styles.helper}>Loading brokerage document requirements…</p>}
   {error&&<p role="alert" className={styles.error}>{error}</p>}
   {!loading&&!error&&applicable.length===0&&<p className={styles.helper}>No document templates are configured for this transaction. Ask Back Office to configure Compliance forms.</p>}
