@@ -75,6 +75,15 @@ export default function TransactionActions({deal,docs,office,linked,notify,reloa
  if(office&&firm&&approved)options.push({id:'complete',label:'Confirm legal completion'});
  if(office&&complete){if(!deal.rv_funds_verified)options.push({id:'funds',label:'Verify commission receipt'});options.push({id:'archive',label:'Close / archive file'})}
  if(office&&deal.rv_stage!=='Collapsed'&&['Submitted','Approved'].includes(deal.review_status))options.push({id:'missing',label:'Request missing documents'});
+ // Set the selected action LAST. In particular, do not call resetAction() from
+ // the select's onChange: it also clears the controlled value and can be
+ // confusing when a transaction view refreshes during a document upload.
+ function chooseAction(next:ActionName|''){
+  setDate(brokerageDay());setDocument('');setNewDocs([]);setNote('');
+  setFirmFiles({...EMPTY_FIRM});setFirmSaved({});setAddendums([]);setAddendumsSaved({});
+  setExtensionFile(null);setExtensionSaved('');
+  setAction(next);
+ }
  const firmFields=fields.filter(field=>!field.representation||field.representation===deal.representation);
  const needsPDF=['terminate','extend_listing','extend_completion','complete'].includes(action);
  const needsDate=['firm','extend_subject','terminate','extend_listing','extend_completion','complete'].includes(action);
@@ -167,7 +176,7 @@ export default function TransactionActions({deal,docs,office,linked,notify,reloa
    {!office&&approved&&!sale&&!linked&&<button type="button" className="btn primary" disabled={busy} onClick={onConvert}>Accepted offer / create sale</button>}
    {!office&&approved&&conditional&&<button type="button" className="btn" disabled={busy} onClick={()=>void reopen()}>Update accepted-offer details</button>}
    {options.length>0&&<label style={{display:'inline-flex',alignItems:'center',gap:8,fontSize:13,fontWeight:700}}>File action
-    <select aria-label="Select transaction action" value={action} disabled={busy} onChange={e=>{resetAction();setAction(e.target.value as ActionName|'')}} style={{minWidth:240,maxWidth:'100%',padding:'9px 12px',borderRadius:8,border:'1px solid #cbd9cc',background:'#fff'}}>
+    <select aria-label="Select transaction action" value={action} disabled={busy} onChange={e=>chooseAction(e.currentTarget.value as ActionName|'')} style={{minWidth:240,maxWidth:'100%',padding:'9px 12px',borderRadius:8,border:'1px solid #cbd9cc',background:'#fff',position:'relative',zIndex:1,cursor:'pointer',pointerEvents:'auto'}}>
      <option value="">Choose action…</option>{options.map(o=><option key={o.id} value={o.id}>{o.label}</option>)}
     </select>
    </label>}

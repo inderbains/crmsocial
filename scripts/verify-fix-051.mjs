@@ -1,0 +1,18 @@
+import assert from 'node:assert/strict';
+import {readFileSync,existsSync} from 'node:fs';
+const read=x=>readFileSync(new URL('../'+x,import.meta.url),'utf8');
+const trans=read('app/transactions.tsx');
+const actions=read('app/transaction-actions.tsx');
+const closing=read('app/closing-panel.tsx');
+const packet=read('supabase/functions/closing-packet/index.ts');
+assert.equal((trans.match(/<TransactionActions\b/g)||[]).length,1,'Single action component per transaction detail');
+assert.match(trans,/<TransactionActions key=\{active\.id\}/,'Action selection not remounted by unrelated document refresh');
+assert.match(actions,/onChange=\{e=>chooseAction/,'Controlled select uses direct action selection');
+assert.match(actions,/Sale Report Form/);
+assert.match(actions,/Receipt of Funds/);
+assert.match(actions,/Trade Record Sheet/);
+assert.match(closing,/verifiedIds\.includes\(d\.id\)/);
+assert.match(packet,/agentexpensesbydate/);
+assert.ok(existsSync(new URL('../supabase/functions/_shared/calculations.mjs',import.meta.url)));
+assert.ok(existsSync(new URL('../supabase/functions/_shared/pdf.mjs',import.meta.url)));
+console.log('Fix 051 source checks passed. Live Supabase deployment and browser interactions remain untested.');
