@@ -18,8 +18,8 @@ const fields:{key:FirmKey;label:string;template:string;accept:string;pdfOnly?:bo
  {key:'pds',label:'Property Disclosure Statement (PDS)',template:'Property Disclosure Statement (PDS)',accept:'.pdf,.jpg,.jpeg,.png,.doc,.docx,.xls,.xlsx,.txt'},
  {key:'cheque',label:'Deposit Cheque Copy / Receipt',template:'Deposit cheque copy / deposit receipt',accept:'.pdf,.jpg,.jpeg,.png,.doc,.docx,.xls,.xlsx,.txt'},
  {key:'trade',label:'Trade Record Sheet',template:'Trade record sheet',accept:'.pdf,.jpg,.jpeg,.png,.doc,.docx,.xls,.xlsx,.txt'},
- {key:'saleReport',label:'Sale Report Form',template:'Sale report form',representation:'listing',accept:'.pdf,.jpg,.jpeg,.png,.doc,.docx,.xls,.xlsx,.txt'},
- {key:'receipt',label:'Receipt of Funds',template:'Receipt of funds',representation:'selling',accept:'.pdf,.jpg,.jpeg,.png,.doc,.docx,.xls,.xlsx,.txt'},
+ {key:'saleReport',label:'Sale Report Form',template:'Sale report form',representation:'selling',accept:'.pdf,.jpg,.jpeg,.png,.doc,.docx,.xls,.xlsx,.txt'},
+ {key:'receipt',label:'Receipt of Funds',template:'Receipt of funds',representation:'listing',accept:'.pdf,.jpg,.jpeg,.png,.doc,.docx,.xls,.xlsx,.txt'},
 ];
 const ADDENDUM_LABEL='Subject extension or other addendum (if applicable)';
 const labels:Partial<Record<ActionName,string>>={
@@ -119,7 +119,7 @@ export default function TransactionActions({deal,docs,office,linked,notify,reloa
  async function submit(){
   if(!action)return;
   if(needsPDF&&!document){notify('Upload or select the signed PDF for this action.');return}
-  if(action==='firm'&&missingFirm){notify(deal.representation==='listing'?'Required: Subject Removal, Title Search, PDS, Deposit Cheque Copy, Trade Record Sheet and Sale Report Form.':'Required: Subject Removal, Title Search, PDS, Deposit Cheque Copy, Trade Record Sheet and Receipt of Funds.');return}
+  if(action==='firm'&&missingFirm){notify(deal.representation==='listing'?'Required: Subject Removal, Title Search, PDS, Deposit Cheque Copy, Trade Record Sheet and Receipt of Funds.':'Required: Subject Removal, Title Search, PDS, Deposit Cheque Copy, Trade Record Sheet and Sale Report Form.');return}
   if(action==='extend_subject'&&!extensionFile&&!extensionSaved){notify('Select the signed subject extension PDF.');return}
   if(action==='extend_subject'&&(!date||date.length!==10)){notify('Enter the revised subject removal date.');return}
   if(action==='collapse'&&!window.confirm('Close this offer as COLLAPSED? No document is required. The sale will be locked and excluded from firm sales.'))return;
