@@ -125,7 +125,19 @@ export default function PersonalDates({userId,notify,brokerageHome=false,brokera
  async function save(e:FormEvent){e.preventDefault();if(!editing)return;await run(async()=>{const {id,...values}=editing;const payload={...values,title:values.title.trim()};const r=id?await db.from('agent_personal_dates').update(payload).eq('id',id).eq('user_id',userId):await db.from('agent_personal_dates').insert({...payload,user_id:userId});if(r.error)throw r.error;setEditing(null);notify('Reminder saved')})}
  const openDeal=(id:string)=>window.dispatchEvent(new CustomEvent('realvolt:open-transaction',{detail:{id,office:brokerageHome}}));
  const openClient=(id:string)=>window.dispatchEvent(new CustomEvent('realvolt:open-crm-contact',{detail:{id}}));
- async function openNotice(n:Notice){if(!n.read_at){const r=await db.from('rv_transaction_notifications').update({read_at:new Date().toISOString()}).eq('id',n.id).eq('recipient_id',userId);if(r.error)notify(r.error.message);else setNotices(a=>a.map(x=>x.id===n.id?{...x,read_at:new Date().toISOString()}:x))}openDeal(n.deal_id)}
+ async function openNotice(n:Notice){
+  const found=await db.from('deal_files').select('id,review_status,rv_stage').eq('id',n.deal_id).maybeSingle();
+  if(found.error||!found.data){notify('Cannot open this notification’s file: '+(found.error?.message||'File unavailable'));return;}
+  const deal=found.data;
+  const section=deal.rv_stage==='Archived'?'Closed Files':deal.review_status==='Approved'?'Approved':deal.review_status==='Changes requested'?'Changes requested':'Review queue';
+  const focus=deal.review_status==='Changes requested'&&!brokerageHome?'corrections':deal.review_status==='Submitted'&&brokerageHome?'compliance':undefined;
+  const detail:{id:string;office:boolean;section?:string;focus?:string;accepted?:boolean}={id:n.deal_id,office:brokerageHome,section,focus};
+  window.dispatchEvent(new CustomEvent('realvolt:open-transaction',{detail}));
+  if(!detail.accepted)return;
+  const r=await db.from('rv_transaction_notifications').update({read_at:new Date().toISOString()}).eq('id',n.id).eq('recipient_id',userId).is('read_at',null);
+  if(r.error){notify('Could not clear notification: '+r.error.message);return;}
+  setNotices(a=>a.filter(x=>x.id!==n.id));
+ }
  const dueSoon=daysFrom(today,7),freshFrom=daysFrom(today,-7);
  const personal=entries.filter(x=>!x.completed&&x.event_date>=today).sort((a,b)=>a.event_date.localeCompare(b.event_date));
  const futurePersonal=personal.filter(x=>x.event_date>dueSoon);
@@ -170,7 +182,9 @@ export default function PersonalDates({userId,notify,brokerageHome=false,brokera
  const clientEvents=[...clients.map(c=>({id:c.id,at:c.updated_at,title:c.created_at===c.updated_at?'New client':'Client updated',client:c})),...notes.filter(n=>clientById.has(n.contact_id)).map(n=>({id:n.contact_id,at:n.created_at,title:`${n.activity_type} recorded`,client:clientById.get(n.contact_id)!}))].sort((a,b)=>b.at.localeCompare(a.at));
  const uniqueClientEvents=clientEvents.filter((x,i,a)=>a.findIndex(y=>x.id===y.id)===i);
  const clientItems:InboxItem[]=uniqueClientEvents.map(x=>({id:'client-'+x.id,title:`${x.client.full_name} · ${x.title}`,detail:`${x.client.contact_type} · ${timeLabel(x.at)}`,unread:x.at.slice(0,10)>=freshFrom,onOpen:()=>openClient(x.id)}));
+ const notificationItems:InboxItem[]=notices.filter(n=>!n.read_at).map(n=>({id:'notice-'+n.id,title:n.message,detail:`${addresses[n.deal_id]||'Transaction'} · ${timeLabel(n.created_at)}`,unread:true,onOpen:()=>void openNotice(n)}));
  const tabs:InboxTab[]=[
+  ...(notificationItems.length?[{key:'notifications' as const,label:'Notifications',count:notificationItems.length,items:notificationItems,empty:'All notifications viewed.'}]:[]),
   {key:'reminders',label:'Reminders',count:reminderItems.length,items:reminderItems,empty:'No reminders due soon.'},
   {key:'upcoming',label:'Upcoming',count:upcomingItems.length,items:upcomingItems,empty:'No upcoming transaction dates.'},
   {key:'activity',label:'Activity',count:activityItems.length,items:activityItems,empty:'No offer collapses, listing terminations or subject extensions.'},
@@ -199,7 +213,7 @@ export default function PersonalDates({userId,notify,brokerageHome=false,brokera
     {salesError&&<p className={styles.goalError} role="status">{salesError}</p>}
     {error&&<p className={styles.goalError} role="alert">{error}</p>}
    </div>
-   <div className={styles.personalRight}><SmartInbox037 tabs={tabs} ariaLabel={brokerageHome?'Brokerage home notification inbox':'Agent notification inbox'}/></div>
+   <div className={styles.personalRight}><SmartInbox037 tabs={tabs} autoOpenNotifications ariaLabel={brokerageHome?'Brokerage home notification inbox':'Agent notification inbox'}/></div>
   </div>
  </section>
  {editing&&<div className={styles.reminderOverlay} onMouseDown={e=>{if(e.target===e.currentTarget&&!busy)setEditing(null)}}>

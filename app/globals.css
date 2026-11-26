@@ -363,3 +363,6 @@ aside nav .bo-nav-section>summary:hover{background:var(--theme-soft,#e7eddf)}
 aside nav .bo-nav-section[open]>summary span{transform:rotate(180deg)}
 aside nav .bo-nav-subitems{display:grid;gap:2px;margin:2px 0 4px 7px;padding-left:9px;border-left:2px solid var(--line)}
 aside nav .bo-nav-subitems button{min-height:36px;padding:9px!important;border-radius:7px;font-size:12px;line-height:1.35;white-space:normal;overflow-wrap:anywhere}
+
+/* Fix 077: show all four Transactions & Review cards on a single desktop row. */
+@media(min-width:1101px){.bo-dashboard .bo-module-grid-four{grid-template-columns:repeat(4,minmax(0,1fr))}}

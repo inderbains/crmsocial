@@ -1,15 +1,21 @@
 'use client';
-import {useId,useState} from 'react';
+import {useEffect,useId,useRef,useState} from 'react';
 import styles from './SmartInbox037.module.css';
 
-export type InboxKey='reminders'|'upcoming'|'activity'|'clients'|'new'|'review'|'workflow'|'completed'|'accepted'|'sold';
+export type InboxKey='notifications'|'reminders'|'upcoming'|'activity'|'clients'|'new'|'review'|'workflow'|'completed'|'accepted'|'sold';
 export type InboxItem={id:string;title:string;detail:string;onOpen:()=>void;unread?:boolean;progress?:number};
 export type InboxTab={key:InboxKey;label:string;count:number;items:InboxItem[];empty:string};
 /** Shared display-only inbox: no open tab on first render, no changes to financial permissions. */
-export default function SmartInbox037({tabs,ariaLabel}: {tabs:InboxTab[];ariaLabel:string}){
+export default function SmartInbox037({tabs,ariaLabel,autoOpenNotifications=false}: {tabs:InboxTab[];ariaLabel:string;autoOpenNotifications?:boolean}){
  const [selected,setSelected]=useState<InboxKey|null>(null);
+ const didAutoOpen=useRef(false);
+ const unreadCount=tabs.find(t=>t.key==='notifications')?.count||0;
+ useEffect(()=>{
+  if(autoOpenNotifications&&!didAutoOpen.current&&unreadCount>0){didAutoOpen.current=true;setSelected('notifications');}
+ },[autoOpenNotifications,unreadCount]);
  const [expanded,setExpanded]=useState(false);
  const selectedTab=tabs.find(t=>t.key===selected);
+ useEffect(()=>{if(selected==='notifications'&&!unreadCount)setSelected(null)},[selected,unreadCount]);
  const panelId=useId();
  return <div className={styles.inbox} aria-label={ariaLabel}>
   <div className={styles.tabs} role="group" aria-label={ariaLabel+' categories'}>

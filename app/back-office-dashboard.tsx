@@ -1,6 +1,6 @@
 'use client';
 import {useCallback,useEffect,useMemo,useState} from 'react';
-import {RefreshCw,ClipboardCheck,FilePenLine,FileCheck2,UserRound,UserRoundPlus,SlidersHorizontal,Printer,WalletCards,CreditCard,Landmark,Scale,ChartNoAxesCombined,ShieldCheck,ClipboardList,Settings2,Database,Megaphone,Route,TrendingUp,ArrowUpRight,FileSpreadsheet} from 'lucide-react';
+import {RefreshCw,ClipboardCheck,FilePenLine,FileCheck2,UserRound,UserRoundPlus,SlidersHorizontal,Printer,WalletCards,CreditCard,Landmark,Scale,ChartNoAxesCombined,ShieldCheck,ClipboardList,Settings2,Database,Megaphone,Route,TrendingUp,ArrowUpRight,FileSpreadsheet,Archive} from 'lucide-react';
 import type {LucideIcon} from 'lucide-react';
 import {getSupabase} from '../lib/supabase';
 import {brokerageDay} from '../lib/listing-status';
@@ -53,18 +53,25 @@ export default function BackOfficeDashboard({userId,brokerageName,deals,requirem
  const insights=useMemo(()=>computeOfficeInsights({deals:merged,payouts,accounts,ledger,reconciliations,requirements,reconciliationMonth:previousMonth},today.slice(0,7)),[merged,payouts,accounts,ledger,reconciliations,requirements,previousMonth,today]);
  const submissions=merged.filter(d=>d.review_status==='Submitted').sort((a,b)=>String(b.updated_at||b.created_at||'').localeCompare(String(a.updated_at||a.created_at||'')));
  const needsDocs=merged.filter(d=>requirements.some(r=>r.deal_id===d.id&&r.verified!==true)&&d.review_status!=='Draft');
- const freshnessCutoff=new Date(Date.now()-48*60*60*1000).toISOString();
- const freshSubmissions=submissions.filter(d=>String(d.updated_at||d.created_at||'')>=freshnessCutoff);
- const freshIds=new Set(freshSubmissions.map(d=>d.id));
- const reviewList=[...submissions.filter(d=>!freshIds.has(d.id)),...needsDocs.filter(d=>d.review_status!=='Submitted')];
+ const reviewList=[...submissions,...needsDocs.filter(d=>d.review_status!=='Submitted')]; // Pending reviews remain in their folder even after a notification is read.
  const upcoming=summary.filter(d=>d.next_date&&d.next_date>=today&&d.review_status!=='Draft');
- const uniqueNotices=notices.filter((x,i,arr)=>arr.findIndex(a=>a.deal_id===x.deal_id&&a.message===x.message)===i);
- const openDeal=(id:string)=>window.dispatchEvent(new CustomEvent('realvolt:open-transaction',{detail:{id,office:true,focus:merged.find(d=>d.id===id)?.review_status==='Submitted'?'compliance':undefined}}));
- async function openNotice(n:Notice){if(!n.read_at){const r=await db.from('rv_transaction_notifications').update({read_at:new Date().toISOString()}).eq('id',n.id).eq('recipient_id',sessionUserId);if(!r.error)setNotices(a=>a.map(x=>x.id===n.id?{...x,read_at:new Date().toISOString()}:x))}openDeal(n.deal_id)}
- const fileItems:InboxItem[]=freshSubmissions.map(d=>({id:'submitted-'+d.id,title:`${d.kind==='Sale'?'Sale':'Listing'} submitted`,detail:d.address||'Transaction',unread:true,onOpen:()=>openDeal(d.id)}));
+ const unreadNotices=notices.filter(n=>!n.read_at); // Inbox is transient; transaction records are not.
+ const openDeal=(id:string)=>window.dispatchEvent(new CustomEvent('realvolt:open-transaction',{detail:{id,office:true,section:'Review queue',focus:merged.find(d=>d.id===id)?.review_status==='Submitted'?'compliance':undefined}}));
+ async function openNotice(n:Notice){
+  const found=await db.from('deal_files').select('id,rv_stage,review_status').eq('id',n.deal_id).maybeSingle();
+  if(found.error||!found.data){setNoticeError('Cannot open the source transaction: '+(found.error?.message||'File unavailable'));return;}
+  const deal=found.data;
+  const section=deal.rv_stage==='Archived'?'Closed Files':deal.review_status==='Approved'?'Approved':deal.review_status==='Changes requested'?'Changes requested':'Review queue';
+  const detail:{id:string;office:boolean;section:string;focus?:string;accepted?:boolean}={id:n.deal_id,office:true,section,focus:deal.review_status==='Submitted'?'compliance':undefined};
+  window.dispatchEvent(new CustomEvent('realvolt:open-transaction',{detail}));
+  if(!detail.accepted)return; // A cancelled navigation must not consume a notification.
+  const r=await db.from('rv_transaction_notifications').update({read_at:new Date().toISOString()}).eq('id',n.id).eq('recipient_id',sessionUserId).is('read_at',null);
+  if(r.error){setNoticeError('Could not mark notification as read: '+r.error.message);return;}
+  setNotices(a=>a.filter(x=>x.id!==n.id));
+ }
  const reviewItems:InboxItem[]=reviewList.map(d=>({id:'review-'+d.id,title:'Documents need verification',detail:d.address||'Transaction',onOpen:()=>openDeal(d.id)}));
  const upcomingItems:InboxItem[]=upcoming.map(x=>({id:'date-'+x.id,title:`${dateType(x)} · ${dateLabel(x.next_date!)}`,detail:x.address||'Transaction',onOpen:()=>openDeal(x.id)}));
- const activityItems:InboxItem[]=uniqueNotices.map(n=>({id:'activity-'+n.id,title:n.message,detail:`${merged.find(d=>d.id===n.deal_id)?.address||'Transaction'} · ${timeLabel(n.created_at)}`,unread:!n.read_at,onOpen:()=>void openNotice(n)}));
+ const notificationItems:InboxItem[]=unreadNotices.map(n=>({id:'notification-'+n.id,title:n.message,detail:`${merged.find(d=>d.id===n.deal_id)?.address||'Transaction'} · ${timeLabel(n.created_at)}`,unread:true,onOpen:()=>void openNotice(n)}));
  // The previous Automatic Transaction Workflow is retained as an on-demand tab.
  // It only recommends the next responsible module; it never sends legal emails or releases money.
  const stages=useMemo(()=>summarizeWorkflow(merged,{today,ledger,payouts,allocations,matches,accounts,deliveries:closingDeliveries,requirements}),
@@ -81,16 +88,16 @@ export default function BackOfficeDashboard({userId,brokerageName,deals,requirem
   onOpen:()=>openWorkflow(x.dealId,x.nextModule),
  }));
  const tabs:InboxTab[]=[
-  {key:'new',label:'New files',count:fileItems.length,items:fileItems,empty:'No new files awaiting review.'},
+  ...(notificationItems.length?[{key:'notifications' as const,label:'Notifications',count:notificationItems.length,items:notificationItems,empty:'All notifications viewed.'}]:[]),
   {key:'review',label:'Review',count:reviewItems.length,items:reviewItems,empty:'No outstanding document reviews.'},
   {key:'upcoming',label:'Upcoming',count:upcomingItems.length,items:upcomingItems,empty:'No important dates coming up.'},
-  {key:'activity',label:'Activity',count:activityItems.filter(x=>x.unread).length,items:activityItems,empty:noticeError||'No recent transaction activity.'},
   {key:'workflow',label:'Deal stages',count:stageItems.length,items:stageItems,empty:'No outstanding transaction stages.'},
  ];
 
  const submitted=merged.filter(d=>d.review_status==='Submitted');
  const changes=merged.filter(d=>d.review_status==='Changes requested');
- const approved=merged.filter(d=>d.review_status==='Approved');
+ const approved=merged.filter(d=>d.review_status==='Approved'&&d.rv_stage!=='Archived');
+ const closedFiles=merged.filter(d=>d.kind==='Sale'&&d.rv_stage==='Archived');
  const unpaid=payouts.filter(p=>p.status==='Authorized').length;
  const pendingDeposits=merged.filter(d=>d.kind==='Sale'&&d.deposit_holder==='our_brokerage'&&Number(d.deposit_amount)>0&&ledger.filter(l=>l.deal_id===d.id&&accounts.some(a=>a.kind==='Trust'&&a.id===l.account_id)).reduce((n,l)=>n+Number(l.amount||0),0)+.01<Number(d.deposit_amount));
  const pendingRecs=insights.unreconciled;
@@ -99,6 +106,7 @@ export default function BackOfficeDashboard({userId,brokerageName,deals,requirem
       {name:'Review queue',description:'Review submitted files, documents and approvals.',icon:ClipboardCheck,badge:submitted.length},
       {name:'Changes requested',description:'Follow up on files returned to agents for correction.',icon:FilePenLine,badge:changes.length},
       {name:'Approved',description:'Access approved transaction records and files.',icon:FileCheck2,badge:approved.length},
+      {name:'Closed Files',description:'Read-only archived sales, uploaded documents and linked listing records.',icon:Archive,badge:closedFiles.length},
     ]},
     {heading:'Agents & Payments',hint:'Manage people, plans, commissions and payouts.',modules:[
       {name:'Agents & profiles',description:'Agent contact details, licences, production and records.',icon:UserRound},
@@ -149,12 +157,12 @@ export default function BackOfficeDashboard({userId,brokerageName,deals,requirem
      <button type="button" onClick={()=>jumpFinance('Accounting')}><b>{insights.unreconciled.length}</b> Reconciliations to check</button>
     </div>
    </div>
-   <div className={styles.officeRight}><SmartInbox037 tabs={tabs} ariaLabel="Back Office updates"/></div>
+   <div className={styles.officeRight}>{noticeError&&<p className={styles.goalError} role="alert">{noticeError}</p>}<SmartInbox037 tabs={tabs} ariaLabel="Back Office updates" autoOpenNotifications/></div>
   </section>
   <div className="bo-modules-title"><div><p className="bo-kicker">YOUR BACK OFFICE</p><h2>Applications & tools</h2><p>Manage transactions, agents and financial operations.</p></div><span className="bo-count">{totalModules} modules</span></div>
   {groups.map(group=><section className="bo-group" key={group.heading}>
    <div className="bo-group-head"><h3>{group.heading}</h3><p>{group.hint}</p></div>
-   <div className="bo-module-grid">{group.modules.map(m=><button key={m.name} type="button" className="bo-module-card" onClick={()=>['Accounting','Reporting','Compliance'].includes(m.name)?jumpFinance(m.name as 'Accounting'|'Reporting'|'Compliance'):onNavigate(m.name)}>
+   <div className={`bo-module-grid ${group.heading==='Transactions & Review'?'bo-module-grid-four':''}`}>{group.modules.map(m=><button key={m.name} type="button" className="bo-module-card" onClick={()=>['Accounting','Reporting','Compliance'].includes(m.name)?jumpFinance(m.name as 'Accounting'|'Reporting'|'Compliance'):onNavigate(m.name)}>
     <span className="bo-module-top"><span className="bo-module-icon"><m.icon size={24}/></span>{!!m.badge&&<span className="bo-module-badge">{m.badge} items</span>}</span>
     <strong>{m.name}</strong><span className="bo-module-description">{m.description}</span><span className="bo-module-open">Open module <ArrowUpRight size={16}/></span>
    </button>)}</div>

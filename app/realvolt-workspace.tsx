@@ -43,8 +43,17 @@ export default function Workspace(){
  const [profileAgent,setProfileAgent]=useState('');
  const [isBrokerageAdmin,setIsBrokerageAdmin]=useState(false);
  const [notificationDeal,setNotificationDeal]=useState<string|undefined>(undefined);
+ const [notificationFocus,setNotificationFocus]=useState<string|undefined>(undefined);
  useEffect(()=>{const clear=()=>setNotificationDeal(undefined);window.addEventListener('realvolt:clear-transaction-link',clear);return()=>window.removeEventListener('realvolt:clear-transaction-link',clear)},[]);
- useEffect(()=>{const listener=(event:Event)=>{const detail=(event as CustomEvent<{id:string;office:boolean}>).detail;if(!detail?.id||detail.office&&!isBrokerageAdmin)return;if(!window.dispatchEvent(new Event('realvolt:before-navigate',{cancelable:true})))return;setNotificationDeal(detail.id);setPage(detail.office?'Back Office':'Transactions');setSectionView(detail.office?'Review queue':'All transactions');window.scrollTo(0,0)};window.addEventListener('realvolt:open-transaction',listener);return()=>window.removeEventListener('realvolt:open-transaction',listener)},[isBrokerageAdmin]);
+ useEffect(()=>{const listener=(event:Event)=>{
+  const detail=(event as CustomEvent<{id:string;office:boolean;section?:string;focus?:string;accepted?:boolean}>).detail;
+  if(!detail?.id||(detail.office&&!isBrokerageAdmin))return;
+  if(!window.dispatchEvent(new Event('realvolt:before-navigate',{cancelable:true})))return;
+  const allowedSections=['Review queue','Changes requested','Approved','Closed Files'];
+  setNotificationDeal(detail.id);setNotificationFocus(detail.focus);setPage(detail.office?'Back Office':'Transactions');
+  setSectionView(detail.office&&detail.section&&allowedSections.includes(detail.section)?detail.section:detail.office?'Review queue':'All transactions');
+  detail.accepted=true;window.scrollTo(0,0);
+ };window.addEventListener('realvolt:open-transaction',listener);return()=>window.removeEventListener('realvolt:open-transaction',listener)},[isBrokerageAdmin]);
  const [mobileMenuOpen,setMobileMenuOpen]=useState(false);
  const [ownedProperties,setOwnedProperties]=useState<Array<{id:string;payload:PropertyData}>>([]);
  const [propertyLoading,setPropertyLoading]=useState(false);
@@ -140,13 +149,13 @@ export default function Workspace(){
   window.history.pushState({...window.history.state,realvoltWorkspace:{userId:user.id,page:nextPage,section:nextSection}},'',window.location.href);
  };
  const allowNavigation=()=>window.dispatchEvent(new Event('realvolt:before-navigate',{cancelable:true}));
- const navigateSection=(nextSection:string)=>{setNotificationDeal(undefined);
+ const navigateSection=(nextSection:string)=>{setNotificationDeal(undefined);setNotificationFocus(undefined);
   if(!allowNavigation())return;
   if(nextSection!==sectionView)rememberNavigation(page,nextSection);
   setMobileMenuOpen(false);setProfileAgent('');setSectionView(nextSection);window.scrollTo(0,0);
  };
  async function signOut(){if(!allowNavigation())return;const {error}=await getSupabase()!.auth.signOut();if(error)notify(error.message)}
- const navigate=(p:Page)=>{setNotificationDeal(undefined);if(p==='Back Office'&&!isBrokerageAdmin){notify('Only verified brokerage administrators can open Back Office.');return;}if(!allowNavigation())return;const nextSection=p==='Transactions'?'All transactions':p==='Back Office'?'Dashboard':p==='SignVolt'?'All requests':'Overview';if(p!==page||nextSection!==sectionView)rememberNavigation(p,nextSection);setMobileMenuOpen(false);setProfileAgent('');setPage(p);setSectionView(nextSection);window.scrollTo(0,0)};
+ const navigate=(p:Page)=>{setNotificationDeal(undefined);setNotificationFocus(undefined);if(p==='Back Office'&&!isBrokerageAdmin){notify('Only verified brokerage administrators can open Back Office.');return;}if(!allowNavigation())return;const nextSection=p==='Transactions'?'All transactions':p==='Back Office'?'Dashboard':p==='SignVolt'?'All requests':'Overview';if(p!==page||nextSection!==sectionView)rememberNavigation(p,nextSection);setMobileMenuOpen(false);setProfileAgent('');setPage(p);setSectionView(nextSection);window.scrollTo(0,0)};
  const designAd=(type:AdType)=>{const ix:Record<AdType,number>={'Just listed':11,'Just sold':12,'Open house':1,'Price reduction':8,'Buyer leads':10,'Seller leads':9};setEditor(newDraft(ix[type]));};
  const heading=(title:string,sub:string,button=true)=><div className="headrow"><div><h1>{title}</h1><p>{sub}</p></div>{button&&<button className="btn primary" onClick={()=>setEditor(newDraft(0))}>＋ Create a post</button>}</div>;
  const cards=(limit=99)=><div className="grid">{templates.map((t,i)=>({t,i})).filter(({t})=>(filter==='All templates'||t.category===filter)&&t.name.toLowerCase().includes(search.toLowerCase())).slice(0,limit).map(({t,i})=><article className="template" key={i}><button style={{display:'block',width:'100%',padding:0,border:0,textAlign:'left',background:'white',color:'inherit'}} onClick={()=>setEditor(newDraft(i))} aria-label={'Edit '+t.name}><DesignCanvas draft={newDraft(i)} brand={brand}/><div className="info"><b>{t.name}</b><p>{t.category} · Square / Portrait / Story</p></div></button></article>)}</div>;
@@ -180,7 +189,7 @@ export default function Workspace(){
  {page==='CRM'&&sectionView==='Deal Milestones'&&<DealMilestones userId={user.id} notify={notify}/>}
  {page==='CRM'&&sectionView==='Agentic AI'&&<RealVoltAIStudio userId={user.id} notify={notify}/>}
  {page==='CRM'&&!['Meta Leads','Showing requests','Buyer Matching','Lead Funnel','Post-Sale Follow-Ups','Automations','Deal Milestones','Agentic AI'].includes(sectionView)&&<CRM userId={user.id} notify={notify} view={sectionView}/>}
- {(page==='Transactions'||page==='Back Office'&&isBrokerageAdmin&&['Review queue','Changes requested','Approved','Closed Files'].includes(sectionView))&&<Transactions key={page} initialDealId={notificationDeal} userId={user.id} backOffice={page==='Back Office'} view={sectionView} notify={notify}/>}
+ {(page==='Transactions'||page==='Back Office'&&isBrokerageAdmin&&['Review queue','Changes requested','Approved','Closed Files'].includes(sectionView))&&<Transactions key={page} initialDealId={notificationDeal} initialFocus={notificationFocus} userId={user.id} backOffice={page==='Back Office'} view={sectionView} notify={notify}/>}
  {page==='Back Office'&&isBrokerageAdmin&&!['Review queue','Changes requested','Approved','Closed Files','Office DDF & Listings','Office Meta Accounts','Office Lead Routing','Office Marketing Dashboard','Brokerage Control'].includes(sectionView)&&<BackOffice initialAgentUserId={profileAgent} userId={user.id} view={sectionView} notify={notify} onNavigate={navigateSection}/>}
  {page==='Back Office'&&isBrokerageAdmin&&sectionView==='Brokerage Control'&&<><div className="headrow"><div><h1>Brokerage Control</h1><p>Office-only connections, lead routing and brokerage settings.</p></div><span className="badge"><ShieldCheck size={14}/> Verified brokerage admin</span></div><div className="rv-template-grid">{([['Office Meta Accounts','Facebook Pages, Instagram and Meta Ad Accounts for brokerage-owned campaigns'],['Office DDF & Listings','Office-level DDF reference and listing inventory'],['Office Lead Routing','Rules for distributing brokerage lead campaigns'],['Office Marketing Dashboard','Office-wide marketing and campaign activity'],['Brokerage settings','Office information and brokerage appearance']] as const).map(([label,description])=><button key={label} className="rv-template-card rv-control-card" onClick={()=>setSectionView(label)}><Building2 size={23}/><b>{label}</b><p>{description}</p><span>Open →</span></button>)}</div></>}
  {page==='Back Office'&&isBrokerageAdmin&&sectionView==='Office Meta Accounts'&&<MetaConnections initialScope="brokerage" userId={user.id} notify={notify} onOpenAds={()=>navigate('Meta Ads')}/>}
