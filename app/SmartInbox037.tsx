@@ -2,7 +2,7 @@
 import {useId,useState} from 'react';
 import styles from './SmartInbox037.module.css';
 
-export type InboxKey='reminders'|'upcoming'|'activity'|'clients'|'new'|'review'|'workflow'|'completed';
+export type InboxKey='reminders'|'upcoming'|'activity'|'clients'|'new'|'review'|'workflow'|'completed'|'accepted'|'sold';
 export type InboxItem={id:string;title:string;detail:string;onOpen:()=>void;unread?:boolean;progress?:number};
 export type InboxTab={key:InboxKey;label:string;count:number;items:InboxItem[];empty:string};
 /** Shared display-only inbox: no open tab on first render, no changes to financial permissions. */
