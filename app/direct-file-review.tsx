@@ -58,7 +58,7 @@ export default function DirectFileReview({dealId,stage,agentName,docs,revision,b
  };
  return <section id="rv-direct-file-review" aria-label="Review and approve submitted file" className="panel" style={{scrollMarginTop:80,margin:'18px 0',padding:20,border:'1px solid #b6cec0',background:'#f5f9f5',borderRadius:12}}>
   <div className="sectionhead" style={{alignItems:'flex-start'}}>
-   <div><h3>Review submitted file</h3><p className="hint">Our Realtor: <b>{agentName||'Agent profile unavailable'}</b> · Review Accepted Offer and Subject Removal documents together, then approve or request changes here. No separate queue.</p></div>
+   <div><h3>Review submitted file</h3><p className="hint">Realtor: <b>{agentName||'Agent profile unavailable'}</b> · Review Accepted Offer and Subject Removal documents together, then approve or request changes here. No separate queue.</p></div>
    <button type="button" className="btn" onClick={goToUploads}>View submitted documents</button>
   </div>
   {error&&<div className="notice" role="alert">{error} <button type="button" className="btn smallbtn" onClick={()=>void load()}>Retry</button></div>}

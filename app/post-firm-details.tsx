@@ -80,12 +80,12 @@ export default function PostFirmDetails({deal,agentName,office,onSaved,notify}:{
   }catch(err){notify((err as Error).message)}finally{setBusy(false)}
  }
  return <section className="panel" aria-label="Post-firm lawyer and commission details" style={{margin:'20px 0',border:'1px solid #cbdcd1'}}>
-  <div className="sectionhead"><div><h2>After subjects removed — lawyers & commission</h2><p className="hint"><b>Assigned Realtor:</b> {agentName||'Agent profile name unavailable'}</p><p className="hint">Agent: save both lawyer contacts, commission, GST rate and deposit details before Back Office approval. The brokerage will verify documents and generate/send the CIR after approval. Saving this does not issue a payout.</p></div>{mayEdit&&!editing&&<button type="button" className="btn primary" onClick={()=>setEditing(true)}>{bothLawyers?'Edit details':'Enter details'}</button>}</div>
+  <div className="sectionhead"><div><h2>After subjects removed — lawyers & commission</h2><p className="hint"><b>Realtor:</b> {agentName||'Agent profile name unavailable'}</p><p className="hint">Agent: save both lawyer contacts, commission, GST rate and deposit details before Back Office approval. The brokerage will verify documents and generate/send the CIR after approval. Saving this does not issue a payout.</p></div>{mayEdit&&!editing&&<button type="button" className="btn primary" onClick={()=>setEditing(true)}>{bothLawyers?'Edit details':'Enter details'}</button>}</div>
   {!editing?<div className="crm-form-grid">
    <p><b>Buyer lawyer:</b> {deal.buyer_lawyer?.name||'Not entered'}</p>
    <p><b>Seller lawyer:</b> {deal.seller_lawyer?.name||'Not entered'}</p>
-   {(dualCommission||singleListing)&&<p><b>Listing side — Our Realtor {agentName||''}:</b> {fmt(Number(deal.listing_commission||0))} + GST {fmt(Math.round(Number(deal.listing_commission||0)*Number(deal.gst_rate??5))/100)}</p>}
-   {!singleListing&&<p><b>{dualCommission?'Selling side — Cooperating Realtor '+(deal.cooperating_agent||'not entered'):'Our Realtor — '+(agentName||'')}:</b> {fmt(Number(deal.selling_commission||0))} + GST {fmt(Math.round(Number(deal.selling_commission||0)*Number(deal.gst_rate??5))/100)}</p>}
+   {(dualCommission||singleListing)&&<p><b>Listing side — Realtor {agentName||''}:</b> {fmt(Number(deal.listing_commission||0))} + GST {fmt(Math.round(Number(deal.listing_commission||0)*Number(deal.gst_rate??5))/100)}</p>}
+   {!singleListing&&<p><b>{dualCommission?'Selling side — Cooperating Realtor '+(deal.cooperating_agent||'not entered'):'Realtor — '+(agentName||'')}:</b> {fmt(Number(deal.selling_commission||0))} + GST {fmt(Math.round(Number(deal.selling_commission||0)*Number(deal.gst_rate??5))/100)}</p>}
    <p><b>Total commission + GST:</b> {fmt(commissionTotal)} + {fmt(commissionGST)} = {fmt(commissionTotal+commissionGST)} (rate {deal.gst_rate??5}%)</p>
    <p><b>Deposit:</b> ${Number(deal.deposit_amount||0).toLocaleString('en-CA',{minimumFractionDigits:2,maximumFractionDigits:2})} · {deal.deposit_holder==='other_brokerage'?'Other brokerage':'Our brokerage'}</p>
   </div>:<form onSubmit={e=>void save(e)}>

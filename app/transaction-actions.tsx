@@ -29,10 +29,10 @@ const labels:Partial<Record<ActionName,string>>={
  terminate:'Signed listing termination',extend_listing:'Signed listing extension'
 };
 
-export default function TransactionActions({deal,docs,agentName,office,linked,notify,reload,onConvert,onEdit}:{
+export default function TransactionActions({deal,docs,agentName,office,linked,notify,reload,onConvert,onEdit,initialDirectSold=false}:{
  deal:{id:string;kind:string;representation:'listing'|'selling';parent_listing_id?:string|null;cooperating_agent?:string;rv_stage:string|null;review_status:string;rv_completed_date:string|null;rv_funds_verified:boolean;updated_at:string;listing_commission?:number;selling_commission?:number;gst_rate?:number;deposit_amount?:number;deposit_holder?:'our_brokerage'|'other_brokerage';deposit_brokerage?:string};
  docs:DocumentRef[];agentName?:string;office:boolean;linked:boolean;notify:(s:string)=>void;
- reload:()=>Promise<void>;onConvert:()=>void;onEdit:()=>void;
+ reload:()=>Promise<void>;onConvert:()=>void;onEdit:()=>void;initialDirectSold?:boolean;
 }){
  const db=getSupabase()!;
  const [action,setAction]=useState<ActionName|''>('');
@@ -71,11 +71,11 @@ export default function TransactionActions({deal,docs,agentName,office,linked,no
   setExtensionFile(null);setExtensionSaved('');
  }
  useEffect(()=>{
-  setAction('');setFirmStep(1);setSaleOutcome('subject_removed');setDocument('');setNewDocs([]);setNote('');setDate(brokerageDay());
+  setAction(initialDirectSold?'firm':'');setFirmStep(1);setSaleOutcome(initialDirectSold?'direct_sold':'subject_removed');setDocument('');setNewDocs([]);setNote('');setDate(brokerageDay());
   setFinancial({listing_commission:Number(deal.listing_commission||0),selling_commission:Number(deal.selling_commission||0),gst_rate:Number(deal.gst_rate??5),deposit_amount:Number(deal.deposit_amount||0),deposit_holder:deal.deposit_holder||'',deposit_brokerage:deal.deposit_brokerage||''});setBuyerLawyer(emptyLawyer());setSellerLawyer(emptyLawyer());
   setFirmFiles({...EMPTY_FIRM});setFirmSaved({});setAddendums([]);setAddendumsSaved({});
   setExtensionFile(null);setExtensionSaved('');
- },[deal.id]);
+ },[deal.id,initialDirectSold]);
  useEffect(()=>{if(office&&deal.review_status==='Submitted')void db.rpc('rv_tx_action',{p_deal:deal.id,p_action:'seen'})},[office,deal.id,deal.review_status,deal.updated_at,db]);
  const approved=deal.review_status==='Approved';
  const sale=deal.kind==='Sale';
@@ -210,7 +210,7 @@ export default function TransactionActions({deal,docs,agentName,office,linked,no
   catch(err){notify((err as Error).message)}finally{setBusy(false)}
  }
  return <section aria-label="Transaction actions" style={{margin:'20px 0'}}>
-  <h3 style={{fontSize:17,margin:'0 0 10px'}}>Transaction actions</h3><p className="hint">Assigned Realtor: {agentName||'Agent profile name unavailable'}</p>
+  <h3 style={{fontSize:17,margin:'0 0 10px'}}>Transaction actions</h3><p className="hint">Realtor: {agentName||'Agent profile name unavailable'}</p>
   {conditional&&!office&&<p className="hint">First upload the required Accepted Offer documents in Documents & uploads. No admin approval is needed now. At Subject Removal / Direct Sold, submit the offer and firm-sale documents together for Back Office compliance review, along with commission, deposit and lawyer details.</p>}
   {deal.rv_stage==='Collapsed'&&<div className="notice">This offer is collapsed and closed. Its record remains for audit, but no additional transaction or commission actions are permitted.</div>}
   <div className="actions">
@@ -230,7 +230,7 @@ export default function TransactionActions({deal,docs,agentName,office,linked,no
     <p className="hint">Step 1 of 3 — Attach all required documents. These are uploaded with the final submission, not sent to Back Office until you confirm Step 3. Attach these documents when marking the sale firm. They will appear in the compliance file after submission. Each file may be up to 20 MB.</p>
     <p className="hint"><strong>{deal.representation==='listing'?'Our listing — seller-side sale':'Buyer-side sale'}</strong> · All fields below are required for this transaction side.</p>
     {firmFields.map(field=><div className="field" key={field.key}>
-     <label htmlFor={'rv-firm-'+field.key}>{field.label} <strong style={{color:'#a34422'}}>(Required)</strong></label>
+     <label htmlFor={'rv-firm-'+field.key}>{field.key==='signed'&&saleOutcome==='direct_sold'?'Signed unconditional purchase and sale contract (PDF)':field.label} <strong style={{color:'#a34422'}}>(Required)</strong></label>
      <input id={'rv-firm-'+field.key} type="file" accept={field.accept} required={!firmSaved[field.key]} disabled={busy||Boolean(firmSaved[field.key])} onChange={e=>{
       const file=e.target.files?.[0]||null;setFirmFiles(v=>({...v,[field.key]:file}));setFirmSaved(v=>({...v,[field.key]:undefined}));
      }}/>
@@ -244,10 +244,10 @@ export default function TransactionActions({deal,docs,agentName,office,linked,no
    </div>}
    {action==='firm'&&firmStep===2&&<div className="panel" style={{marginTop:12}}>
     <h3>Step 2 of 3 · Realtor commission, GST & deposit</h3>
-    <p className="hint"><b>Our Realtor:</b> {agentName||'Agent profile name unavailable'}. {dualCommission?'Our listing has been sold: record listing-side commission (our Realtor) and selling-side commission (cooperating Realtor). These amounts are separate brokerage-side commissions; they do not automatically authorize two agent payouts.':'Sale-only transaction: enter only the commission for our Realtor’s side. Do not calculate a second internal Realtor payout.'}</p>
+    <p className="hint"><b>Realtor:</b> {agentName||'Agent profile name unavailable'}. {dualCommission?'Our listing has been sold: record listing-side commission (our Realtor) and selling-side commission (cooperating Realtor). These amounts are separate brokerage-side commissions; they do not automatically authorize two agent payouts.':'Sale-only transaction: enter only the commission for our Realtor’s side. Do not calculate a second internal Realtor payout.'}</p>
     <div className="crm-form-grid">
-     {(dualCommission||singleListing)&&<div className="field"><label htmlFor="rv-listing-commission">{dualCommission?'Listing Realtor side':'Our Realtor — Listing side'} — commission before GST (CAD)</label><input id="rv-listing-commission" type="number" min="0" step="0.01" required value={financial.listing_commission} onChange={e=>setAmount('listing_commission',e.target.value)}/></div>}
-     {!singleListing&&<div className="field"><label htmlFor="rv-selling-commission">{dualCommission?`Selling Realtor side${deal.cooperating_agent?' · '+deal.cooperating_agent:''}`:'Our Realtor'} — commission before GST (CAD)</label><input id="rv-selling-commission" type="number" min="0" step="0.01" required value={financial.selling_commission} onChange={e=>setAmount('selling_commission',e.target.value)}/></div>}
+     {(dualCommission||singleListing)&&<div className="field"><label htmlFor="rv-listing-commission">{dualCommission?'Listing Realtor side':'Realtor — Listing side'} — commission before GST (CAD)</label><input id="rv-listing-commission" type="number" min="0" step="0.01" required value={financial.listing_commission} onChange={e=>setAmount('listing_commission',e.target.value)}/></div>}
+     {!singleListing&&<div className="field"><label htmlFor="rv-selling-commission">{dualCommission?`Selling Realtor side${deal.cooperating_agent?' · '+deal.cooperating_agent:''}`:'Realtor'} — commission before GST (CAD)</label><input id="rv-selling-commission" type="number" min="0" step="0.01" required value={financial.selling_commission} onChange={e=>setAmount('selling_commission',e.target.value)}/></div>}
      <div className="field"><label htmlFor="rv-commission-gst-rate">Applicable commission GST rate (%)</label><input id="rv-commission-gst-rate" type="number" min="0" max="100" step="0.01" required value={financial.gst_rate} onChange={e=>setAmount('gst_rate',e.target.value)}/></div>
      <div className="field"><label htmlFor="rv-deposit-amount">Deposit amount (CAD)</label><input id="rv-deposit-amount" type="number" min="0" step="0.01" required value={financial.deposit_amount} onChange={e=>setAmount('deposit_amount',e.target.value)}/></div>
      <div className="field"><label htmlFor="rv-deposit-held-by">Deposit held by (Required)</label><select id="rv-deposit-held-by" required value={financial.deposit_holder} onChange={e=>setFinancial(v=>({...v,deposit_holder:e.target.value as typeof v.deposit_holder}))}><option value="">Choose deposit holder</option><option value="our_brokerage">Our brokerage — trust account</option><option value="other_brokerage">Other brokerage</option></select></div>
