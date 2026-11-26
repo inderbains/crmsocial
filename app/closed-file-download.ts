@@ -7,11 +7,22 @@ function safeName(name:string){const clean=name.replace(/[\\/\x00-\x1f\x7f:*?"<>
 export function downloadName(name:string){return safeName(name)}
 function put16(view:DataView,at:number,value:number){view.setUint16(at,value,true)}
 function put32(view:DataView,at:number,value:number){view.setUint32(at,value>>>0,true)}
+/** Use real ArrayBuffer values for BlobPart under TypeScript's strict typed-array definitions. */
+function toBlobArrayBuffer(bytes: Uint8Array): ArrayBuffer {
+ const {buffer, byteOffset, byteLength}=bytes;
+ if(buffer instanceof ArrayBuffer){
+  return byteOffset===0 && byteLength===buffer.byteLength ? buffer : buffer.slice(byteOffset,byteOffset+byteLength);
+ }
+ // SharedArrayBuffer-backed input must be copied to a standard ArrayBuffer for Blob.
+ const copy=new Uint8Array(new ArrayBuffer(byteLength));
+ copy.set(bytes);
+ return copy.buffer;
+}
 /** Standard ZIP-store format. Files are not compressed, but remain downloadable in one ZIP. */
 export function makeClosedFileZip(files:ArchiveZipFile[]):Blob{
  if(!files.length)throw new Error('No downloadable documents were found in this closed file.');
  if(files.length>500)throw new Error('Too many documents for a browser ZIP. Download individually.');
- const names=new Set<string>();const localParts:BlobPart[]=[];const centralParts:BlobPart[]=[];
+ const names=new Set<string>();const localParts:Uint8Array[]=[];const centralParts:Uint8Array[]=[];
  let offset=0,centralLength=0,total=0;
  for(const f of files){
   total+=f.data.byteLength;
@@ -41,7 +52,7 @@ export function makeClosedFileZip(files:ArchiveZipFile[]):Blob{
  const end=new Uint8Array(22);const dv=new DataView(end.buffer);
  put32(dv,0,0x06054b50);put16(dv,4,0);put16(dv,6,0);put16(dv,8,files.length);put16(dv,10,files.length);
  put32(dv,12,centralLength);put32(dv,16,offset);put16(dv,20,0);
- return new Blob([...localParts,...centralParts,end],{type:'application/zip'});
+ return new Blob([...localParts,...centralParts,end].map(toBlobArrayBuffer),{type:'application/zip'});
 }
 export function saveLocalBlob(blob:Blob,filename:string){
  const url=URL.createObjectURL(blob);
