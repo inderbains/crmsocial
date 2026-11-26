@@ -35,7 +35,6 @@ export default function Transactions({userId,backOffice,view,notify,initialDealI
  useEffect(()=>{if(!backOffice)return;void(async()=>{const m=await getSupabase()!.from('brokerage_members').select('brokerage_id,role').eq('user_id',userId).maybeSingle();if(m.data?.role!=='admin')return;const r=await getSupabase()!.from('office_agents').select('user_id,full_name').eq('brokerage_id',m.data.brokerage_id);if(r.data)setOfficeAgents(r.data.filter(a=>a.user_id))})();},[backOffice,userId]);
  function agentLink(owner:string){const p=officeAgents.find(a=>a.user_id===owner);return backOffice&&p?<button className="text-link no-print" onClick={()=>window.dispatchEvent(new CustomEvent('realvolt:agent-profile',{detail:owner}))}>{p.full_name}</button>:null}
  const [documentRevision,setDocumentRevision]=useState(0);
- const [cirEmailStatus,setCirEmailStatus]=useState<'checking'|'accepted'|'not_sent'|'error'>('checking');
  const [requiredReady,setRequiredReady]=useState(false);
  const [extraDocName,setExtraDocName]=useState('');
   const [offerOutcome,setOfferOutcome]=useState<'conditional'|'direct_sold'>('conditional');
@@ -54,19 +53,6 @@ export default function Transactions({userId,backOffice,view,notify,initialDealI
   // Keep Back Office's Submitted queue in sync after an agent resubmits corrections.
   useEffect(()=>{if(!backOffice)return;const refresh=()=>void reload(true);const timer=setInterval(refresh,15000);window.addEventListener('focus',refresh);return()=>{clearInterval(timer);window.removeEventListener('focus',refresh)}},[backOffice,reload]);
  const active=rows.find(d=>d.id===selected),locked=!!active&&!['Draft','Changes requested'].includes(active.review_status);
- // The legal-completion action is unavailable until the CIR/letter packet has
- // been accepted by the mail provider. This does not imply inbox delivery.
- useEffect(()=>{
-  let current=true;
-  const forClosing=rows.find(d=>d.id===selected);
-  setCirEmailStatus('checking');
-  if(!backOffice||!forClosing||forClosing.kind!=='Sale'||forClosing.rv_stage!=='Sold'||forClosing.review_status!=='Approved')return ()=>{current=false};
-  void db.from('closing_deliveries').select('id').eq('deal_id',forClosing.id).eq('status','accepted').limit(1).then(({data,error})=>{
-   if(current)setCirEmailStatus(error?'error':data?.length?'accepted':'not_sent');
-  });
-  return ()=>{current=false};
- },[backOffice,selected,rows,db]);
-
  // Resolve the file owner from the brokerage's central agent profile, not the client or cooperating agent.
  // The current agent can also use their personal workspace profile as a fallback.
  useEffect(()=>{
@@ -248,14 +234,14 @@ export default function Transactions({userId,backOffice,view,notify,initialDealI
  {backOffice&&active.kind==='Sale'&&active.rv_stage==='Sold'&&active.review_status==='Approved'&&
   <section aria-label="CIR and lawyer email step" style={{marginTop:18}}>
    <h3 style={{fontSize:18,margin:'0 0 8px'}}>3. CIR & lawyer email — approved file</h3>
-   <p className="hint">Review the CIR, select verified conveyancing documents, then send the package to the lawyer. Legal completion comes next, not before the email is accepted by the provider.</p>
-   <ClosingPanel agentName={fileOwnerName} key={active.id+'-'+documentRevision} dealId={active.id} docs={docs} notify={notify} onSaved={refreshFile} onDeliveryAccepted={()=>setCirEmailStatus('accepted')}/>
+   <p className="hint">Review the CIR and select verified conveyancing documents before sending the lawyer package when ready. You can record confirmed legal completion separately below.</p>
+   <ClosingPanel agentName={fileOwnerName} key={active.id+'-'+documentRevision} dealId={active.id} docs={docs} notify={notify} onSaved={refreshFile}/>
   </section>}
  {backOffice&&active.kind==='Sale'&&active.rv_stage==='Sold'&&active.review_status==='Approved'&&
   <section aria-label="Legal completion step" className="panel" style={{marginTop:18}}>
-   <h3>4. Legal completion — after CIR email</h3>
-   {cirEmailStatus==='accepted'?!statusError&&<TransactionActions key={active.id+'-complete'} agentName={fileOwnerName} deal={active} docs={docs} office={true} linked={linked(active)} notify={notify} reload={refreshFile} onEdit={()=>beginEdit({...active})} onConvert={()=>{}}/>:
-    <p className="hint">{cirEmailStatus==='checking'?'Checking CIR email history…':cirEmailStatus==='error'?'Cannot verify CIR email history. Check Back Office access and refresh the file.':'Send and record the CIR / lawyer email above first. Then this section will enable legal completion, including the actual completion date and lawyer letter.'}</p>}
+   <h3>4. Legal completion — administrator confirmation</h3>
+   <p className="hint">Confirm completion only after receiving the lawyer's confirmation. Enter the actual completion date and attach the lawyer completion letter. CIR emailing is available above but is not required to record legal completion.</p>
+   {!statusError&&<TransactionActions key={active.id+'-complete'} agentName={fileOwnerName} deal={active} docs={docs} office={true} linked={linked(active)} notify={notify} reload={refreshFile} onEdit={()=>beginEdit({...active})} onConvert={()=>{}}/>}
   </section>}
  {backOffice&&active.kind==='Sale'&&['Completed','Archived'].includes(active.rv_stage||'')&&<ComplianceClosingPanel agentName={fileOwnerName} key={active.id+'-'+documentRevision} deal={active} docs={docs} office={true} notify={notify} onSaved={refreshFile}/>}
  {backOffice&&active.rv_stage==='Completed'&&
