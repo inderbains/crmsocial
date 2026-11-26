@@ -2,25 +2,26 @@
 import {useEffect,useId,useRef,useState} from 'react';
 import styles from './SmartInbox037.module.css';
 
-export type InboxKey='notifications'|'reminders'|'upcoming'|'activity'|'clients'|'new'|'review'|'workflow'|'completed'|'accepted'|'sold';
+export type InboxKey='reminders'|'upcoming'|'activity'|'clients'|'new'|'review'|'workflow'|'completed'|'accepted'|'sold';
 export type InboxItem={id:string;title:string;detail:string;onOpen:()=>void;unread?:boolean;progress?:number};
-export type InboxTab={key:InboxKey;label:string;count:number;items:InboxItem[];empty:string};
+export type InboxTab={key:InboxKey;label:string;count:number;items:InboxItem[];empty:string;unreadCount?:number};
 /** Shared display-only inbox: no open tab on first render, no changes to financial permissions. */
-export default function SmartInbox037({tabs,ariaLabel,autoOpenNotifications=false}: {tabs:InboxTab[];ariaLabel:string;autoOpenNotifications?:boolean}){
+export default function SmartInbox037({tabs,ariaLabel,autoOpenUnread=false,preferredUnreadTab}: {tabs:InboxTab[];ariaLabel:string;autoOpenUnread?:boolean;preferredUnreadTab?:InboxKey}){
  const [selected,setSelected]=useState<InboxKey|null>(null);
  const didAutoOpen=useRef(false);
- const unreadCount=tabs.find(t=>t.key==='notifications')?.count||0;
  useEffect(()=>{
-  if(autoOpenNotifications&&!didAutoOpen.current&&unreadCount>0){didAutoOpen.current=true;setSelected('notifications');}
- },[autoOpenNotifications,unreadCount]);
+  if(autoOpenUnread&&!didAutoOpen.current&&preferredUnreadTab&&tabs.some(t=>t.key===preferredUnreadTab&&(t.unreadCount||0)>0)){
+   didAutoOpen.current=true;
+   setSelected(current=>current||preferredUnreadTab);
+  }
+ },[autoOpenUnread,preferredUnreadTab,tabs]);
  const [expanded,setExpanded]=useState(false);
  const selectedTab=tabs.find(t=>t.key===selected);
- useEffect(()=>{if(selected==='notifications'&&!unreadCount)setSelected(null)},[selected,unreadCount]);
  const panelId=useId();
  return <div className={styles.inbox} aria-label={ariaLabel}>
   <div className={styles.tabs} role="group" aria-label={ariaLabel+' categories'}>
    {tabs.map(t=><button key={t.key} type="button" className={`${styles.tab} ${selected===t.key?styles.active:''} ${t.key==='sold'?styles.tabSold:''}`} aria-pressed={selected===t.key} aria-controls={panelId} onClick={()=>{setSelected(s=>s===t.key?null:t.key);setExpanded(false)}}>
-    <span>{t.label}</span>{t.count>0&&<span className={styles.count} aria-label={`${t.count} updates`}>{t.count>99?'99+':t.count}</span>}
+    <span>{t.label}</span>{t.count>0&&<span className={styles.count} aria-label={`${t.count} items`}>{t.count>99?'99+':t.count}</span>}{Boolean(t.unreadCount)&&<span className={styles.tabUnread} aria-label={`${t.unreadCount} new updates`} title={`${t.unreadCount} new updates`}/>}
    </button>)}
   </div>
   <div className={styles.results} id={panelId} aria-live="polite">

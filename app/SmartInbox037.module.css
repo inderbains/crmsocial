@@ -97,3 +97,6 @@
 @media(max-width:540px){.personalTopButton{top:7px}}
 
 .itemSold{border-left:2px solid #c93333;padding-left:10px;border-radius:5px}
+
+/* Fix 079: unread alerts live in their existing categories, not a Notifications tab. */
+.tabUnread{height:7px;width:7px;border-radius:50%;background:#d75b29;flex-shrink:0}

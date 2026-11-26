@@ -65,13 +65,13 @@ export default function BackOfficeDashboard({userId,brokerageName,deals,requirem
   const detail:{id:string;office:boolean;section:string;focus?:string;accepted?:boolean}={id:n.deal_id,office:true,section,focus:deal.review_status==='Submitted'?'compliance':undefined};
   window.dispatchEvent(new CustomEvent('realvolt:open-transaction',{detail}));
   if(!detail.accepted)return; // A cancelled navigation must not consume a notification.
-  const r=await db.from('rv_transaction_notifications').update({read_at:new Date().toISOString()}).eq('id',n.id).eq('recipient_id',sessionUserId).is('read_at',null);
+  const r=await db.from('rv_transaction_notifications').update({read_at:new Date().toISOString()}).eq('deal_id',n.deal_id).eq('recipient_id',sessionUserId).is('read_at',null);
   if(r.error){setNoticeError('Could not mark notification as read: '+r.error.message);return;}
-  setNotices(a=>a.filter(x=>x.id!==n.id));
+  setNotices(a=>a.filter(x=>x.deal_id!==n.deal_id));
  }
  const reviewItems:InboxItem[]=reviewList.map(d=>({id:'review-'+d.id,title:'Documents need verification',detail:d.address||'Transaction',onOpen:()=>openDeal(d.id)}));
  const upcomingItems:InboxItem[]=upcoming.map(x=>({id:'date-'+x.id,title:`${dateType(x)} · ${dateLabel(x.next_date!)}`,detail:x.address||'Transaction',onOpen:()=>openDeal(x.id)}));
- const notificationItems:InboxItem[]=unreadNotices.map(n=>({id:'notification-'+n.id,title:n.message,detail:`${merged.find(d=>d.id===n.deal_id)?.address||'Transaction'} · ${timeLabel(n.created_at)}`,unread:true,onOpen:()=>void openNotice(n)}));
+
  // The previous Automatic Transaction Workflow is retained as an on-demand tab.
  // It only recommends the next responsible module; it never sends legal emails or releases money.
  const stages=useMemo(()=>summarizeWorkflow(merged,{today,ledger,payouts,allocations,matches,accounts,deliveries:closingDeliveries,requirements}),
@@ -87,11 +87,29 @@ export default function BackOfficeDashboard({userId,brokerageName,deals,requirem
   progress:x.percent,
   onOpen:()=>openWorkflow(x.dealId,x.nextModule),
  }));
+ // Route transient Back Office notices into Review or Deal stages.
+ // Current review state wins, so an older upload notification cannot reopen a finished approval.
+ const dealIndex=new Map(merged.map(d=>[d.id,d]));
+ const officeNoticeCategory=(n:Notice):'review'|'workflow'=>{
+  const d=dealIndex.get(n.deal_id);
+  return d?.review_status==='Submitted'||d?.review_status==='Changes requested'?'review':'workflow';
+ };
+ const reviewAlerts:InboxItem[]=[],workflowAlerts:InboxItem[]=[];
+ const reviewAlertDeals=new Set<string>(),workflowAlertDeals=new Set<string>();
+ const actionableNotices=unreadNotices.filter(n=>dealIndex.has(n.deal_id));
+ for(const n of actionableNotices){
+  const key=officeNoticeCategory(n),seen=key==='review'?reviewAlertDeals:workflowAlertDeals;
+  if(seen.has(n.deal_id))continue;
+  seen.add(n.deal_id);
+  (key==='review'?reviewAlerts:workflowAlerts).push({id:'notification-'+n.id,title:n.message,detail:`${dealIndex.get(n.deal_id)?.address||'Transaction'} · ${timeLabel(n.created_at)}`,unread:true,onOpen:()=>void openNotice(n)});
+ }
+ const reviewTabItems=[...reviewAlerts,...reviewItems.filter(x=>!reviewAlertDeals.has(x.id.slice('review-'.length)))];
+ const workflowTabItems=[...workflowAlerts,...stageItems.filter(x=>!workflowAlertDeals.has(x.id.slice('stage-'.length)))];
+ const latestOfficeNotice=actionableNotices.length?officeNoticeCategory(actionableNotices[0]):undefined;
  const tabs:InboxTab[]=[
-  ...(notificationItems.length?[{key:'notifications' as const,label:'Notifications',count:notificationItems.length,items:notificationItems,empty:'All notifications viewed.'}]:[]),
-  {key:'review',label:'Review',count:reviewItems.length,items:reviewItems,empty:'No outstanding document reviews.'},
+  {key:'review',label:'Review',count:reviewTabItems.length,items:reviewTabItems,unreadCount:reviewAlerts.length,empty:'No outstanding document reviews.'},
   {key:'upcoming',label:'Upcoming',count:upcomingItems.length,items:upcomingItems,empty:'No important dates coming up.'},
-  {key:'workflow',label:'Deal stages',count:stageItems.length,items:stageItems,empty:'No outstanding transaction stages.'},
+  {key:'workflow',label:'Deal stages',count:workflowTabItems.length,items:workflowTabItems,unreadCount:workflowAlerts.length,empty:'No outstanding transaction stages.'},
  ];
 
  const submitted=merged.filter(d=>d.review_status==='Submitted');
@@ -157,7 +175,7 @@ export default function BackOfficeDashboard({userId,brokerageName,deals,requirem
      <button type="button" onClick={()=>jumpFinance('Accounting')}><b>{insights.unreconciled.length}</b> Reconciliations to check</button>
     </div>
    </div>
-   <div className={styles.officeRight}>{noticeError&&<p className={styles.goalError} role="alert">{noticeError}</p>}<SmartInbox037 tabs={tabs} ariaLabel="Back Office updates" autoOpenNotifications/></div>
+   <div className={styles.officeRight}>{noticeError&&<p className={styles.goalError} role="alert">{noticeError}</p>}<SmartInbox037 tabs={tabs} ariaLabel="Back Office updates" autoOpenUnread preferredUnreadTab={latestOfficeNotice}/></div>
   </section>
   <div className="bo-modules-title"><div><p className="bo-kicker">YOUR BACK OFFICE</p><h2>Applications & tools</h2><p>Manage transactions, agents and financial operations.</p></div><span className="bo-count">{totalModules} modules</span></div>
   {groups.map(group=><section className="bo-group" key={group.heading}>
