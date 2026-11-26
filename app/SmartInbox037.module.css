@@ -88,3 +88,12 @@
 .reminderForm input:focus,.reminderForm textarea:focus{outline:2px solid #b0c9b1;outline-offset:1px}
 .reminderForm .editorActions{margin-top:2px;gap:10px}
 @media(max-width:540px){.reminderModal{padding:20px 16px}.reminderForm .editorGrid{grid-template-columns:1fr}.reminderForm .editorActions button{flex:1 1 auto}}
+
+/* Fix 075: align the reminder button higher and outline Sold rather than filling it. */
+.personalTopButton{top:9px}
+.tabSold,.tabSold.active{border:2px solid #c93333;background:transparent;color:#b72b2b}
+.tabSold:hover{background:rgba(255,255,255,.6)}
+@media(max-width:900px){.personalTopButton{top:9px}}
+@media(max-width:540px){.personalTopButton{top:7px}}
+
+.itemSold{border-left:2px solid #c93333;padding-left:10px;border-radius:5px}
