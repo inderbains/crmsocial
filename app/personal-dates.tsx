@@ -1,5 +1,5 @@
 'use client';
-import {useCallback,useEffect,useMemo,useState,type FormEvent} from 'react';
+import {useCallback,useEffect,useState,type FormEvent} from 'react';
 import {getSupabase} from '../lib/supabase';
 import {brokerageDay} from '../lib/listing-status';
 import SmartInbox037,{type InboxTab,type InboxItem} from './SmartInbox037';
@@ -8,13 +8,8 @@ import styles from './SmartInbox037.module.css';
 type Entry={id:string;title:string;event_date:string;notes:string;completed:boolean};
 type TxDate={id:string;address:string;kind:string;display_status:string;next_date:string|null};
 type Notice={id:number;deal_id:string;message:string;created_at:string;read_at:string|null};
-type SaleStage={id:string;address:string;rv_stage:string|null;review_status:string};
 type NoticeDeal={id:string;address:string;kind:string;rv_stage:string|null;review_status:string};
-type NoticeCategory='activity'|'completed'|'accepted'|'sold';
-type AuditEvent={id:number;deal_id:string;actor_id:string|null;action:string;occurred_at:string;old_values:Record<string,unknown>|null;new_values:Record<string,unknown>|null};
 type Task={id:string;contact_id:string|null;title:string;due_date:string|null;completed:boolean};
-type Client={id:string;full_name:string;contact_type:string;created_at:string;updated_at:string};
-type ClientNote={id:string;contact_id:string;activity_type:string;created_at:string};
 type DashboardPrefs={motivation_quote:string;monthly_sales_goal:number};
 const DEFAULT_QUOTE='Consistency creates results.';
 const validGoal=(n:number)=>Number.isInteger(n)&&n>=1&&n<=10000;
@@ -22,14 +17,12 @@ const validGoal=(n:number)=>Number.isInteger(n)&&n>=1&&n<=10000;
 const dateLabel=(day:string)=>new Date(day+'T12:00:00Z').toLocaleDateString('en-CA',{month:'short',day:'numeric',timeZone:'UTC'});
 const timeLabel=(stamp:string)=>new Date(stamp).toLocaleDateString('en-CA',{month:'short',day:'numeric',timeZone:'America/Vancouver'});
 const nextDateTitle=(x:TxDate)=>x.kind==='Listing'?'Listing expiry':x.display_status==='Accepted offer'?'Subject removal':x.display_status==='Completed'?'Possession':'Completion';
-const daysFrom=(d:string,offset:number)=>{const dt=new Date(d+'T12:00:00Z');dt.setUTCDate(dt.getUTCDate()+offset);return dt.toISOString().slice(0,10)};
 export default function PersonalDates({userId,notify,brokerageHome=false,brokerageId}:{userId:string;notify:(s:string)=>void;brokerageHome?:boolean;brokerageId?:string|null}){
 
  const db=getSupabase()!;
- const [entries,setEntries]=useState<Entry[]>([]),[dates,setDates]=useState<TxDate[]>([]),[notices,setNotices]=useState<Notice[]>([]),[addresses,setAddresses]=useState<Record<string,string>>({});
- const [saleStages,setSaleStages]=useState<SaleStage[]>([]),[auditEvents,setAuditEvents]=useState<AuditEvent[]>([]);
+ const [entries,setEntries]=useState<Entry[]>([]),[dates,setDates]=useState<TxDate[]>([]),[notices,setNotices]=useState<Notice[]>([]);
  const [noticeDeals,setNoticeDeals]=useState<Record<string,NoticeDeal>>({});
- const [tasks,setTasks]=useState<Task[]>([]),[clients,setClients]=useState<Client[]>([]),[notes,setNotes]=useState<ClientNote[]>([]);
+ const [tasks,setTasks]=useState<Task[]>([]);
  const [editing,setEditing]=useState<(Omit<Entry,'id'>&{id?:string})|null>(null),[busy,setBusy]=useState(false),[error,setError]=useState(''),[today,setToday]=useState(brokerageDay());
  useEffect(()=>{
   if(!editing)return;
@@ -97,39 +90,31 @@ export default function PersonalDates({userId,notify,brokerageHome=false,brokera
  }
 
  const load=useCallback(async()=>{
-  // Back Office may see lifecycle actions performed by assigned agents;
-  // the personal view is limited to actions taken by the signed-in Realtor.
-  const auditBase=db.from('transaction_audit_events').select('id,deal_id,actor_id,action,occurred_at,old_values,new_values').in('action',['Accepted offer collapsed','Accepted offer — subject extension status updated','listing_terms:UPDATE']);
-  const auditQuery=brokerageHome?auditBase:auditBase.eq('actor_id',userId);
-  const [p,t,n,task,client,note,sales,audit]=await Promise.all([
+  // Home is an inbox and calendar, not a duplicate transaction filing system.
+  // Agents see their own dates; brokerage admins see their brokerage's dates.
+  const txDateQuery=db.from('rv_tx_summary').select('id,address,kind,display_status,next_date')
+    .not('next_date','is',null).neq('review_status','Draft').order('next_date').limit(80);
+  const [p,t,n,task]=await Promise.all([
    db.from('agent_personal_dates').select('id,title,event_date,notes,completed').eq('user_id',userId).order('event_date').limit(100),
-   db.from('rv_tx_summary').select('id,address,kind,display_status,next_date').eq('user_id',userId).not('next_date','is',null).neq('review_status','Draft').order('next_date').limit(50),
-   db.from('rv_transaction_notifications').select('id,deal_id,message,created_at,read_at').eq('recipient_id',userId).order('created_at',{ascending:false}).limit(50),
-   db.from('crm_tasks').select('id,contact_id,title,due_date,completed').eq('user_id',userId).eq('completed',false).not('due_date','is',null).order('due_date').limit(40),
-   db.from('crm_contacts').select('id,full_name,contact_type,created_at,updated_at').eq('user_id',userId).order('updated_at',{ascending:false}).limit(50),
-   db.from('crm_notes').select('id,contact_id,activity_type,created_at').eq('user_id',userId).order('created_at',{ascending:false}).limit(50),
-   (brokerageHome&&brokerageId?db.from('deal_files').select('id,address,rv_stage,review_status').eq('brokerage_id',brokerageId):db.from('deal_files').select('id,address,rv_stage,review_status').eq('user_id',userId)).eq('kind','Sale').in('rv_stage',['Accepted offer','Sold','Completed','Archived']).is('rv_deleted_at',null).order('updated_at',{ascending:false}).limit(100),
-   auditQuery.order('occurred_at',{ascending:false}).limit(100),
+   brokerageHome&&brokerageId?txDateQuery.eq('brokerage_id',brokerageId):txDateQuery.eq('user_id',userId),
+   db.from('rv_transaction_notifications').select('id,deal_id,message,created_at,read_at')
+    .eq('recipient_id',userId).is('read_at',null).order('created_at',{ascending:false}).limit(100),
+   db.from('crm_tasks').select('id,contact_id,title,due_date,completed').eq('user_id',userId)
+    .eq('completed',false).not('due_date','is',null).order('due_date').limit(80),
   ]);
-  if(p.error){setError('Personal reminders unavailable. Check your existing workspace setup.')}else{setEntries(p.data||[]);setError('')}
-  if(!t.error)setDates(t.data||[]);
-  if(!sales.error)setSaleStages((sales.data||[]) as SaleStage[]);
-  if(!audit.error)setAuditEvents((audit.data||[]) as AuditEvent[]);
+  if(p.error)setError('Personal reminders unavailable. Check your workspace setup.');
+  else {setEntries((p.data||[]) as Entry[]);setError('')}
+  if(!t.error)setDates((t.data||[]) as TxDate[]);
+  if(!task.error)setTasks((task.data||[]) as Task[]);
   if(!n.error){
-   setNotices(n.data||[]);
-   const ids=[...new Set([...(n.data||[]).map((x:{deal_id:string})=>x.deal_id),...(audit.data||[]).map((x:{deal_id:string})=>x.deal_id)])];
+   const rows=(n.data||[]) as Notice[];
+   setNotices(rows);
+   const ids=[...new Set(rows.map(x=>x.deal_id))];
    if(ids.length){
     const a=await db.from('deal_files').select('id,address,kind,rv_stage,review_status').in('id',ids);
-    if(!a.error){
-     const rows=(a.data||[]) as NoticeDeal[];
-     setAddresses(Object.fromEntries(rows.map(x=>[x.id,x.address])));
-     setNoticeDeals(Object.fromEntries(rows.map(x=>[x.id,x])));
-    }
-   }else{setAddresses({});setNoticeDeals({});}
+    if(!a.error)setNoticeDeals(Object.fromEntries(((a.data||[]) as NoticeDeal[]).map(x=>[x.id,x])));
+   }else setNoticeDeals({});
   }
-  if(!task.error)setTasks(task.data||[]);
-  if(!client.error)setClients(client.data||[]);
-  if(!note.error)setNotes(note.data||[]);
  },[db,userId,brokerageHome,brokerageId]);
  useEffect(()=>{void load();const tick=setInterval(()=>{setToday(brokerageDay());void load()},15000);const focus=()=>void load();window.addEventListener('focus',focus);
   const subscription=db.channel(`rv037-agent-notices-${userId}`).on('postgres_changes',{event:'*',schema:'public',table:'rv_transaction_notifications',filter:`recipient_id=eq.${userId}`},()=>void load()).subscribe();
@@ -152,83 +137,40 @@ export default function PersonalDates({userId,notify,brokerageHome=false,brokera
   if(r.error){notify('Could not clear notification: '+r.error.message);return;}
   setNotices(a=>a.filter(x=>x.deal_id!==n.deal_id));
  }
- const dueSoon=daysFrom(today,7),freshFrom=daysFrom(today,-7);
- const personal=entries.filter(x=>!x.completed&&x.event_date>=today).sort((a,b)=>a.event_date.localeCompare(b.event_date));
- const futurePersonal=personal.filter(x=>x.event_date>dueSoon);
- // Completed transaction records remain visible after Back Office archives them.
- // Keep personal completed reminders here as well, without mixing them into Activity.
- const completedSaleItems:InboxItem[]=saleStages.filter(s=>s.rv_stage==='Completed'||s.rv_stage==='Archived').map(s=>({
-  id:'completed-sale-'+s.id,
-  title:s.address,
-  detail:s.rv_stage==='Archived'?'Completed transaction · Archived (read-only)':'Completed transaction · Closing in progress',
-  onOpen:()=>openDeal(s.id)
- }));
- const completedReminderItems:InboxItem[]=entries.filter(x=>x.completed).sort((a,b)=>b.event_date.localeCompare(a.event_date)).map(x=>({id:'done-'+x.id,title:x.title,detail:`Completed reminder · ${dateLabel(x.event_date)}`,onOpen:()=>setEditing({...x})}));
- const completedItems:InboxItem[]=[...completedSaleItems,...completedReminderItems];
  const remaining=Math.max(0,goal-salesCount);
  const progressPercent=Math.min(100,Math.round(salesCount/Math.max(goal,1)*100));
  const progressMessage=remaining>0?`${remaining} sale${remaining===1?'':'s'} left this month`:salesCount>goal?`Goal exceeded by ${salesCount-goal} sale${salesCount-goal===1?'':'s'}!`:'Monthly goal achieved!';
 
- const upcoming=dates.filter(x=>x.next_date&&x.next_date>=today);
- const reminderItems:InboxItem[]=[...personal.filter(x=>x.event_date<=dueSoon).map(x=>({id:'date-'+x.id,title:x.title,detail:`Personal reminder · ${dateLabel(x.event_date)}`,onOpen:()=>setEditing({...x})})),...tasks.filter(x=>x.due_date&&x.due_date<=dueSoon).map(x=>({id:'task-'+x.id,title:x.title,detail:`CRM follow-up · ${dateLabel(x.due_date!)}`,onOpen:()=>x.contact_id?openClient(x.contact_id):window.dispatchEvent(new Event('realvolt:open-crm-tasks'))}))].sort((a,b)=>a.detail.localeCompare(b.detail));
- const upcomingItems:InboxItem[]=[
-  ...upcoming.map(x=>({id:'tx-'+x.id,title:`${nextDateTitle(x)} · ${dateLabel(x.next_date!)}`,detail:x.address,onOpen:()=>openDeal(x.id)})),
-  ...futurePersonal.map(x=>({id:'future-'+x.id,title:`Reminder · ${dateLabel(x.event_date)}`,detail:x.title,onOpen:()=>setEditing({...x})})),
- ];
- // Activity is deliberately limited to the three agent actions requested.
- // Audit events include the agent's own status changes, which are not sent back
- // to their own notifications inbox. Do not show commission/admin notices here.
- const agentActivity:InboxItem[]=auditEvents.flatMap(e=>{
-  const oldValues=e.old_values||{};
-  const newValues=e.new_values||{};
-  let title='';
-  if(e.action==='Accepted offer collapsed')title='Offer collapsed';
-  else if(e.action==='Accepted offer — subject extension status updated')title='Subject extension';
-  else if(e.action==='listing_terms:UPDATE'&&!!newValues.termination_date&&newValues.termination_date!==oldValues.termination_date)title='Listing terminated';
-  if(!title)return [];
-  return [{id:'activity-audit-'+e.id,title,detail:`${addresses[e.deal_id]||'Transaction'} · ${timeLabel(e.occurred_at)}`,onOpen:()=>openDeal(e.deal_id)}];
- });
- // Brokerage recipients see the same three types of updates sent to Back Office.
- const activityItems=agentActivity;
- const acceptedItems:InboxItem[]=saleStages.filter(s=>s.rv_stage==='Accepted offer').map(s=>({id:'accepted-'+s.id,title:s.address,detail:'Accepted Offer · '+s.review_status,onOpen:()=>openDeal(s.id)}));
- const soldItems:InboxItem[]=saleStages.filter(s=>s.rv_stage==='Sold').map(s=>({id:'sold-'+s.id,title:s.address,detail:'Sold · '+s.review_status,onOpen:()=>openDeal(s.id)}));
- const clientById=new Map(clients.map(c=>[c.id,c]));
- const clientEvents=[...clients.map(c=>({id:c.id,at:c.updated_at,title:c.created_at===c.updated_at?'New client':'Client updated',client:c})),...notes.filter(n=>clientById.has(n.contact_id)).map(n=>({id:n.contact_id,at:n.created_at,title:`${n.activity_type} recorded`,client:clientById.get(n.contact_id)!}))].sort((a,b)=>b.at.localeCompare(a.at));
- const uniqueClientEvents=clientEvents.filter((x,i,a)=>a.findIndex(y=>x.id===y.id)===i);
- const clientItems:InboxItem[]=uniqueClientEvents.map(x=>({id:'client-'+x.id,title:`${x.client.full_name} · ${x.title}`,detail:`${x.client.contact_type} · ${timeLabel(x.at)}`,unread:x.at.slice(0,10)>=freshFrom,onOpen:()=>openClient(x.id)}));
- // File notifications are temporary highlights inside the permanent transaction tabs.
- // One new row per file/category prevents a burst of document uploads from flooding the dashboard.
- const noticeCategory=(n:Notice):NoticeCategory=>{
-  const d=noticeDeals[n.deal_id];
-  const msg=n.message.toLowerCase();
-  if(/collaps|subject.{0,20}exten|listing.{0,20}terminat|offer.{0,20}exten/.test(msg))return 'activity';
-  if(d?.rv_stage==='Archived'||d?.rv_stage==='Completed'||/file closed|closed and archived/.test(msg))return 'completed';
-  if(d?.kind==='Sale'&&(d.rv_stage==='Sold'||/firm sale|sold approved|subjects removed/.test(msg)))return 'sold';
-  if(d?.kind==='Sale'&&(d.rv_stage==='Accepted offer'||/accepted offer/.test(msg)))return 'accepted';
-  return 'activity'; // New listings, updates and requests for changes go here.
- };
- const noticeGroups:Record<NoticeCategory,InboxItem[]>={activity:[],completed:[],accepted:[],sold:[]};
- const noticeIds:Record<NoticeCategory,Set<string>>={activity:new Set(),completed:new Set(),accepted:new Set(),sold:new Set()};
- const unreadNotices=notices.filter(n=>!n.read_at&&Boolean(noticeDeals[n.deal_id]));
- for(const n of unreadNotices){
-  const category=noticeCategory(n);
-  if(noticeIds[category].has(n.deal_id))continue;
-  noticeIds[category].add(n.deal_id);
-  noticeGroups[category].push({id:'notice-'+n.id,title:n.message,detail:`${noticeDeals[n.deal_id].address||'Transaction'} · ${timeLabel(n.created_at)}`,unread:true,onOpen:()=>void openNotice(n)});
+ // One unread notification per transaction prevents document-upload bursts from
+ // repeating the same file. Opening a notice preserves its permanent record.
+ const notificationItems:InboxItem[]=[];
+ const seenDeals=new Set<string>();
+ for(const n of notices){
+  if(n.read_at||!noticeDeals[n.deal_id]||seenDeals.has(n.deal_id))continue;
+  seenDeals.add(n.deal_id);
+  const deal=noticeDeals[n.deal_id];
+  notificationItems.push({id:'notice-'+n.id,title:n.message,detail:`${deal.address||'Transaction'} · ${timeLabel(n.created_at)}`,unread:true,onOpen:()=>void openNotice(n)});
  }
- const activityTabItems=[...noticeGroups.activity,...activityItems];
- const completedTabItems=[...noticeGroups.completed,...completedItems.filter(x=>!x.id.startsWith('completed-sale-')||!noticeIds.completed.has(x.id.slice('completed-sale-'.length)))];
- const acceptedTabItems=[...noticeGroups.accepted,...acceptedItems.filter(x=>!noticeIds.accepted.has(x.id.slice('accepted-'.length)))];
- const soldTabItems=[...noticeGroups.sold,...soldItems.filter(x=>!noticeIds.sold.has(x.id.slice('sold-'.length)))];
- const latestNoticeCategory=unreadNotices.length?noticeCategory(unreadNotices[0]):undefined;
+ // Dates in Upcoming are property and transaction deadlines, not reminder tasks.
+ const upcomingItems:InboxItem[]=dates.filter(x=>x.next_date&&x.next_date>=today).map(x=>({
+  id:'tx-'+x.id,title:`${nextDateTitle(x)} · ${dateLabel(x.next_date!)}`,
+  detail:x.address,onOpen:()=>openDeal(x.id)
+ }));
+ // All unfinished personal reminders and dated CRM follow-ups stay here,
+ // including overdue dates. They are not repeated in Upcoming.
+ const reminderItems:InboxItem[]=[
+  ...entries.filter(x=>!x.completed).map(x=>({
+   date:x.event_date,item:{id:'date-'+x.id,title:x.title,detail:`${x.event_date<today?'Overdue · ':''}Reminder · ${dateLabel(x.event_date)}`,onOpen:()=>setEditing({...x})} as InboxItem
+  })),
+  ...tasks.filter(x=>x.due_date).map(x=>({
+   date:x.due_date!,item:{id:'task-'+x.id,title:x.title,detail:`${x.due_date!<today?'Overdue · ':''}CRM follow-up · ${dateLabel(x.due_date!)}`,
+    onOpen:()=>x.contact_id?openClient(x.contact_id):window.dispatchEvent(new Event('realvolt:open-crm-tasks'))} as InboxItem
+  })),
+ ].sort((a,b)=>a.date.localeCompare(b.date)).map(x=>x.item);
  const tabs:InboxTab[]=[
-  {key:'reminders',label:'Reminders',count:reminderItems.length,items:reminderItems,empty:'No reminders due soon.'},
-  {key:'upcoming',label:'Upcoming',count:upcomingItems.length,items:upcomingItems,empty:'No upcoming transaction dates.'},
-  {key:'activity',label:'Activity',count:activityTabItems.length,items:activityTabItems,unreadCount:noticeGroups.activity.length,empty:'No recent file updates or activity.'},
-  {key:'clients',label:'Clients',count:clientItems.filter(x=>x.unread).length,items:clientItems,empty:'No recent client activity.'},
-  {key:'completed',label:'Completed',count:completedTabItems.length,items:completedTabItems,unreadCount:noticeGroups.completed.length,empty:'No completed transactions or reminders yet.'},
-  {key:'accepted',label:'Accepted Offer',count:acceptedTabItems.length,items:acceptedTabItems,unreadCount:noticeGroups.accepted.length,empty:'No accepted offers.'},
-  {key:'sold',label:'Sold',count:soldTabItems.length,items:soldTabItems,unreadCount:noticeGroups.sold.length,empty:'No sold files.'},
+  {key:'new',label:'Notifications',count:notificationItems.length,items:notificationItems,unreadCount:notificationItems.length,empty:'You are all caught up.'},
+  {key:'upcoming',label:'Upcoming Dates',count:upcomingItems.length,items:upcomingItems,empty:'No upcoming transaction dates.'},
+  {key:'reminders',label:'Reminder Dates',count:reminderItems.length,items:reminderItems,empty:'No outstanding reminders.'},
  ];
  return <><section className={styles.personalCard} aria-label={brokerageHome?'Brokerage home workspace':'Agent home workspace'}>
   <div className={styles.personalTopButton}><button className="btn primary" type="button" disabled={busy} onClick={()=>setEditing({title:'',event_date:today,notes:'',completed:false})}>+ Add reminder</button></div>
@@ -250,7 +192,7 @@ export default function PersonalDates({userId,notify,brokerageHome=false,brokera
     {salesError&&<p className={styles.goalError} role="status">{salesError}</p>}
     {error&&<p className={styles.goalError} role="alert">{error}</p>}
    </div>
-   <div className={styles.personalRight}><SmartInbox037 tabs={tabs} autoOpenUnread preferredUnreadTab={latestNoticeCategory} ariaLabel={brokerageHome?'Brokerage workspace updates':'Agent workspace updates'}/></div>
+   <div className={styles.personalRight}><SmartInbox037 tabs={tabs} autoOpenUnread preferredUnreadTab={notificationItems.length?'new':undefined} ariaLabel={brokerageHome?'Brokerage workspace updates':'Agent workspace updates'}/></div>
   </div>
  </section>
  {editing&&<div className={styles.reminderOverlay} onMouseDown={e=>{if(e.target===e.currentTarget&&!busy)setEditing(null)}}>
