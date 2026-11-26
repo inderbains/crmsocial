@@ -6,7 +6,7 @@ type Doc={id:string;name:string};
 type Preview={recipient:{name:string;email:string;side:string};attachments:{filename:string;content:string}[];cir:string;letter:string;preview_hash:string;additional_files:number};
 type Delivery={id:string;recipient_email:string;side:string;status:string;created_at:string;error:string|null};
 const internalFile=/(?:internal|agent[_ .-]*(?:commission|expense|gst)|agentexpensesbydate|agentgstreport|commission[_ .-]*payable|FINTRAC|identity|ID[_ .-]*verification|agent[_ .-]*payout|office[_ .-]*fee)/i;
-export default function ClosingPanel({dealId,agentName,docs,notify,onSaved}:{dealId:string;agentName?:string;docs:Doc[];notify:(s:string)=>void;onSaved?:()=>Promise<void>}){
+export default function ClosingPanel({dealId,agentName,docs,notify,onSaved,onDeliveryAccepted}:{dealId:string;agentName?:string;docs:Doc[];notify:(s:string)=>void;onSaved?:()=>Promise<void>;onDeliveryAccepted?:()=>void}){
  const [side,setSide]=useState('seller'),[instructions,setInstructions]=useState(''),[ids,setIds]=useState<string[]>([]),[preview,setPreview]=useState<Preview|null>(null),[busy,setBusy]=useState(false),[history,setHistory]=useState<Delivery[]>([]),[sent,setSent]=useState(false),[verifiedIds,setVerifiedIds]=useState<string[]>([]),[verificationError,setVerificationError]=useState('');const db=getSupabase()!;
  async function load(){const r=await db.from('closing_deliveries').select('id,recipient_email,side,status,created_at,error').eq('deal_id',dealId).order('created_at',{ascending:false});if(r.error)notify(r.error.message);else setHistory(r.data)}
  useEffect(()=>{void load()},[dealId]);
@@ -27,7 +27,7 @@ export default function ClosingPanel({dealId,agentName,docs,notify,onSaved}:{dea
  async function invoke(action:string){if(verificationError){notify(verificationError);return}setBusy(true);try{const {data,error}=await db.functions.invoke('closing-packet',{body:{action,deal_id:dealId,side,instructions,document_ids:ids,preview_hash:preview?.preview_hash}});if(error){let message=error.message;try{const detail=await error.context?.json();if(detail?.error)message=detail.error}catch{}const status=(error.context as Response|undefined)?.status;
  if(status===404)message='The closing-packet Edge Function was not found in this Supabase project (404). Deploy it to the project used by this site.';
  else if(message.includes('Failed to send a request')||message.includes('Failed to fetch'))message='Cannot reach closing-packet. Check Edge Function deployment, browser network errors and Supabase function logs.';
- throw new Error(message)}if(data.error)throw new Error(data.error);if(action==='preview')setPreview(data);else{setSent(true);notify(data.duplicate?'This packet was already accepted by the email provider':'Email accepted by provider');await load()}}catch(e){notify((e as Error).message)}finally{setBusy(false)}}
+ throw new Error(message)}if(data.error)throw new Error(data.error);if(action==='preview')setPreview(data);else{setSent(true);notify(data.duplicate?'This packet was already accepted by the email provider':'Email accepted by provider');await load();onDeliveryAccepted?.()}}catch(e){notify((e as Error).message)}finally{setBusy(false)}}
  async function saveCir(){if(!preview)return;setBusy(true);try{
   if(docs.some(d=>d.name==='Commission_Instruction_Report.pdf'))throw new Error('CIR already stored in the file; review the existing PDF');
   const cir=preview.attachments.find(x=>x.filename==='Commission_Instruction_Report.pdf');
