@@ -17,7 +17,8 @@ export default function TransactionCommissionPayout({deal,agentName,docs,notify,
  const [receiptLedger,setReceiptLedger]=useState<any[]>([]);
  const [commission,setCommission]=useState<any>(null);
  const [receiptReference,setReceiptReference]=useState('');
- const [receiptAmount,setReceiptAmount]=useState('');
+ const expectedReceipt=Math.round(Number(deal.representation==='listing'?deal.listing_commission:deal.selling_commission)*(1+Number(deal.gst_rate??5)/100)*100)/100;
+ const [receiptAmount,setReceiptAmount]=useState(expectedReceipt>0?expectedReceipt.toFixed(2):'');
  const [receiptAccount,setReceiptAccount]=useState('');
  const [receiptDate,setReceiptDate]=useState(brokerageDay());
  const [month,setMonth]=useState(brokerageDay());
@@ -33,6 +34,8 @@ export default function TransactionCommissionPayout({deal,agentName,docs,notify,
   const failed=[p,a,c,l].find(r=>r.error);
   if(failed?.error){setError(failed.error.message);return}
   setPayouts(p.data||[]);setAccounts(a.data||[]);setCommission(c.data||null);setReceiptLedger(l.data||[]);setError('');
+  const operating=(a.data||[]).filter((item:any)=>item.kind==='Operating'&&item.active!==false);
+  if(operating.length===1)setReceiptAccount(previous=>previous||operating[0].id);
  },[db,deal.id,deal.brokerage_id]);
  useEffect(()=>{void load()},[load]);
  async function execute(name:string,args:Record<string,unknown>,message:string){
@@ -44,7 +47,8 @@ export default function TransactionCommissionPayout({deal,agentName,docs,notify,
  }
  const latest=payouts[0];
  const externalDeposit=deal.deposit_holder==='other_brokerage';
- const hasOperatingReceipt=receiptLedger.some(e=>Number(e.amount)>0&&accounts.some(a=>a.id===e.account_id&&a.kind==='Operating'));
+ const internalDeposit=deal.deposit_holder==='our_brokerage';
+ const hasOperatingReceipt=receiptLedger.some(e=>Math.abs(Number(e.amount)-expectedReceipt)<0.01&&Number(e.amount)>0&&accounts.some(a=>a.id===e.account_id&&a.kind==='Operating'));
  const eligible=deal.rv_stage==='Completed'&&deal.review_status==='Approved'&&deal.rv_funds_verified&&!!deal.rv_completion_letter&&(!externalDeposit||hasOperatingReceipt);
  const commissionBase=Number(commission?.commission_before_gst||0);
  const actualGst=Number(commission?.commission_gst||0);
@@ -54,23 +58,28 @@ export default function TransactionCommissionPayout({deal,agentName,docs,notify,
   <p className="hint">Realtor: {agentName||'Agent profile unavailable'} · {deal.address}</p>
   <p>Review the commission and deductions here, then authorize and issue payment without leaving the transaction. Payments and cheque releases use the existing Back Office audit and ledger functions.</p>
   {error&&<p role="alert" className="notice">{error}</p>}
-  {!deal.rv_funds_verified&&<div className="notice">
-   <b>1. Verify commission received</b><p>Confirm money actually reached the brokerage before authorizing payout. For an externally held deposit, enter the real lawyer/EFT/cheque reference. Recording this reference is not a bank-statement reconciliation.</p>
-   {deal.deposit_holder==='other_brokerage'?<>
-    <div className="crm-form-grid">
-     <label>Brokerage operating bank account<select required value={receiptAccount} onChange={e=>setReceiptAccount(e.target.value)}><option value="">Select operating account</option>{accounts.filter(a=>a.kind==='Operating').map(a=><option key={a.id} value={a.id}>{a.name}</option>)}</select></label>
-     <label>Actual commission funds deposited (CAD)<input type="number" step=".01" min="0.01" required value={receiptAmount} onChange={e=>setReceiptAmount(e.target.value)}/></label>
-     <label>Bank deposit date<input type="date" required value={receiptDate} max={brokerageDay()} onChange={e=>setReceiptDate(e.target.value)}/></label>
-     <label>Cheque/EFT bank reference<input value={receiptReference} onChange={e=>setReceiptReference(e.target.value)} required placeholder="Actual bank deposit reference"/></label>
-    </div>
-    <button type="button" className="btn primary" disabled={busy||!receiptAccount||Number(receiptAmount)<=0||receiptReference.trim().length<4} onClick={()=>{if(confirm('Confirm these REAL funds have arrived in this operating account? This posts a commission receipt to the ledger and marks funds verified.'))void execute('rv072_receive_commission_funds',{p_deal:deal.id,p_account:receiptAccount,p_amount:Number(receiptAmount),p_day:receiptDate,p_reference:receiptReference.trim()},'Bank receipt posted to accounting and funds marked verified. Match the entry in Bank Reconciliation.')}}>Record verified commission deposit</button>
-   </>:<>
-    <p>Deposit held in our brokerage: first record and reconcile trust receipts and authorized commission transfers in Trust & Bank. Do not post a second operating receipt for the same money.</p>
-    <label>Verified trust / commission-transfer reference<input value={receiptReference} onChange={e=>setReceiptReference(e.target.value)} placeholder="Trust ledger transfer and authorization reference"/></label>
-    <button type="button" className="btn primary" disabled={busy||receiptReference.trim().length<6} onClick={()=>{if(confirm('Have you verified the actual trust receipt and authorized commission disbursement in Trust & Bank?'))void execute('rv_tx_action',{p_deal:deal.id,p_action:'funds',p_note:receiptReference.trim()},'Trust commission release confirmed. Verify recorded trust and operating ledger movements in Bank Reconciliation.')}}>Confirm authorized commission receipt</button>
-   </>}
+  {externalDeposit&&(!deal.rv_funds_verified||!hasOperatingReceipt)&&<div className="notice" role="region" aria-label="Record commission bank receipt">
+   <b>{deal.rv_funds_verified?'Finish linking verified commission to the operating bank ledger':'1. Confirm commission received and post to operating bank ledger'}</b>
+   <p>{deal.rv_funds_verified?'This transaction was previously marked received, but no matching operating-account receipt was posted. Confirm the actual bank receipt below once; RealVolt will link it without marking the receipt twice.':'Enter the actual bank receipt once. RealVolt records the operating-account deposit and marks commission received together in one database transaction.'}</p>
+   <p>Expected brokerage commission: <b>{cad(cents(Number(deal.representation==='listing'?deal.listing_commission:deal.selling_commission)))}</b> + GST <b>{cad(cents(expectedReceipt-Number(deal.representation==='listing'?deal.listing_commission:deal.selling_commission)))}</b> = <b>{cad(cents(expectedReceipt))}</b>.</p>
+   <div className="crm-form-grid">
+    <label>Receiving operating bank account<select required value={receiptAccount} onChange={e=>setReceiptAccount(e.target.value)}><option value="">Select operating account</option>{accounts.filter(a=>a.kind==='Operating'&&a.active!==false).map(a=><option key={a.id} value={a.id}>{a.name}</option>)}</select></label>
+    <label>Actual amount received (CAD)<input type="number" step=".01" min="0.01" required value={receiptAmount} onChange={e=>setReceiptAmount(e.target.value)}/></label>
+    <label>Actual bank deposit date<input type="date" required value={receiptDate} max={brokerageDay()} onChange={e=>setReceiptDate(e.target.value)}/></label>
+    <label>Cheque/EFT bank reference<input value={receiptReference} onChange={e=>setReceiptReference(e.target.value)} required placeholder="Actual bank transaction reference"/></label>
+   </div>
+   <button type="button" className="btn primary" disabled={busy||!!error||!receiptAccount||expectedReceipt<=0||Math.abs(Number(receiptAmount)-expectedReceipt)>0.009||receiptReference.trim().length<4||!receiptDate} onClick={()=>{if(confirm(`Confirm ${cad(cents(Number(receiptAmount)))} was ACTUALLY deposited into the selected operating account? RealVolt will post ONE receipt to accounting (or link an exact existing one). This will not transfer or reconcile money at the bank.`))void execute('rv072_receive_commission_funds',{p_deal:deal.id,p_account:receiptAccount,p_amount:Number(receiptAmount),p_day:receiptDate,p_reference:receiptReference.trim()},'Commission receipt recorded/linked to operating-account ledger. Match it in Bank Reconciliation.')}}>{busy?'Recording…':deal.rv_funds_verified?'Link verified receipt to accounting':'Confirm receipt & automatically post to accounting'}</button>
+   {Math.abs(Number(receiptAmount)-expectedReceipt)>0.009&&<p className="hint">The deposit must match the expected {cad(cents(expectedReceipt))} for this represented side. Review commission and GST before posting a different amount.</p>}
+   <p className="hint">Do not record a second deposit if the money already appears in the operating ledger. The server checks for duplicates. Posting a RealVolt ledger entry does not initiate a bank transfer or confirm bank-statement reconciliation.</p>
   </div>}
-  {deal.rv_funds_verified&&externalDeposit&&!hasOperatingReceipt&&<p className="notice" role="alert">This file says commission receipt was verified, but no operating-account receipt is linked in RealVolt's ledger. Record and review the actual deposit in Trust & Bank before authorizing an agent payout here.</p>}
+  {internalDeposit&&!deal.rv_funds_verified&&<div className="notice">
+   <b>1. Confirm authorized trust commission transfer</b>
+   <p>Deposit held in our brokerage: record the actual trust receipt and authorized trust-to-operating transfer in Trust & Bank first. Do not post a second operating receipt for the same money.</p>
+   <label>Verified trust / commission-transfer reference<input value={receiptReference} onChange={e=>setReceiptReference(e.target.value)} placeholder="Trust ledger transfer and authorization reference"/></label>
+   <button type="button" className="btn primary" disabled={busy||receiptReference.trim().length<6} onClick={()=>{if(confirm('Have you verified the actual trust receipt and authorized commission disbursement in Trust & Bank?'))void execute('rv_tx_action',{p_deal:deal.id,p_action:'funds',p_note:receiptReference.trim()},'Trust commission release confirmed. Verify recorded trust and operating ledger movements in Bank Reconciliation.')}}>Confirm authorized commission receipt</button>
+  </div>}
+  {!externalDeposit&&!internalDeposit&&<p className="notice" role="alert">Deposit holder is missing. Save whether our brokerage or another brokerage holds the deposit before verifying commission funds.</p>}
+  {deal.rv_funds_verified&&externalDeposit&&hasOperatingReceipt&&<p className="notice">Commission receipt verified and operating-account deposit linked to this transaction. The bank-statement reconciliation is a separate matching step.</p>}
   <div style={{marginTop:16}}>
    <DealAdmin kind="Sale" agentName={agentName} dealId={deal.id} status={deal.review_status} backOffice={true} docs={docs} canAllocate={!!deal.rv_funds_verified} defaultCommission={Number(deal.representation==='listing'?deal.listing_commission:deal.selling_commission)} defaultGST={0} notify={notify} commissionOnly onFinancialChanged={()=>void load()}/>
   </div>

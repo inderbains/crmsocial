@@ -93,7 +93,7 @@ export default function TransactionActions({deal,docs,agentName,office,linked,no
  }
  if(!office&&firm&&approved)options.push({id:'extend_completion',label:'Extend completion'});
  if(office&&firm&&approved)options.push({id:'complete',label:'Confirm legal completion'});
- if(office&&complete){if(!deal.rv_funds_verified)options.push({id:'funds',label:'Verify commission receipt'});options.push({id:'archive',label:'Close / archive file'})}
+ if(office&&complete)options.push({id:'archive',label:'Close / archive file'}); // Commission receipt is posted together with its bank entry in the on-file payout panel.
  if(office&&deal.rv_stage!=='Collapsed'&&['Submitted','Approved'].includes(deal.review_status))options.push({id:'missing',label:'Request missing documents'});
  // Set the selected action LAST. In particular, do not call resetAction() from
  // the select's onChange: it also clears the controlled value and can be
