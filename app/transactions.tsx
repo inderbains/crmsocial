@@ -51,7 +51,7 @@ export default function Transactions({userId,backOffice,view,notify,initialDealI
  useEffect(()=>{void loadStatuses();const tick=()=>{setTodayTick(n=>n+1);void loadStatuses()};const timer=setInterval(tick,60000);window.addEventListener('focus',tick);return()=>{clearInterval(timer);window.removeEventListener('focus',tick)}},[loadStatuses]);
  function statusFor(d:Deal){const t=listingTerms.find(t=>t.id===d.id);return summaries.find(s=>s.id===d.id)?.display_status||(d.kind==='Sale'?(d.rv_stage||'Needs confirmation'):listingStatus(d.kind,t?.expiry_date||null,t?.termination_date||null))}
  function stageColor(d:Deal){const status=statusFor(d);if(d.kind==='Sale'&&['Sold','Completed','Archived'].includes(d.rv_stage||'')||status==='Sold')return '#c93333';if(status==='Accepted offer'||d.rv_stage==='Accepted offer')return '#d47c1f';if(status==='Active')return '#2d7a52';return null;}
- function visibleStage(d:Deal){if(d.kind==='Sale'&&d.rv_stage==='Archived')return 'Sold · Closed';if(d.kind==='Sale'&&d.rv_stage==='Completed')return 'Sold · Completed';return statusFor(d);}
+ function visibleStage(d:Deal){if(d.kind==='Sale'&&d.rv_stage==='Archived')return 'Completed · Archived';if(d.kind==='Sale'&&d.rv_stage==='Completed')return 'Completed';return statusFor(d);}
  const stageBorder=(d:Deal)=>{const color=stageColor(d);return color?{border:'2px solid '+color,borderRadius:11}:undefined};
  const stageBadge=(d:Deal)=>{const color=stageColor(d);return color?{border:'1px solid '+color,color,background:'transparent'}:undefined};
  const reload=useCallback(async(quiet=false)=>{if(!quiet)setLoading(true);try{let q=db.from('deal_files').select('*').is('rv_deleted_at',null).order('created_at',{ascending:false});q=initialDealId?q.eq('id',initialDealId):backOffice?q.or('review_status.neq.Draft,and(kind.eq.Sale,rv_stage.eq."Accepted offer")'):q.eq('user_id',userId);const r=await q;if(r.error)throw r.error;setRows(r.data);setError('')}catch(e){setError((e as Error).message+' — Check that supabase/004_transactions.sql has been installed.')}finally{if(!quiet)setLoading(false)}},[db,userId,backOffice,initialDealId]);
@@ -211,8 +211,9 @@ export default function Transactions({userId,backOffice,view,notify,initialDealI
   if(agentFilter&&backOffice&&d.user_id!==agentFilter)return false;
   if(!d.address.toLowerCase().includes(query.toLowerCase()))return false;
   if(view==='Closed Files'||view==='Closed files')return d.kind==='Sale'&&d.rv_stage==='Archived';
-  // Closed sales remain in Closed Files rather than the everyday transaction lists.
-  if(d.rv_stage==='Archived')return false;
+  // Agent-owned archived sales stay visible in All transactions and Sales.
+  // Back Office has a separate, dedicated Closed Files view; the review queue
+  // below still excludes archived files unless they need actual review.
   const linkedSaleExists=rows.some(child=>child.parent_listing_id===d.id&&!['Collapsed','Archived'].includes(child.rv_stage||''));
   if(!backOffice&&!['Listings','Archive','Expired listings','Terminated listings'].includes(view)&&d.kind==='Listing'&&linkedSaleExists)return false;
   if(backOffice){

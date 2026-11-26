@@ -129,7 +129,16 @@ export default function PersonalDates({userId,notify,brokerageHome=false,brokera
  const dueSoon=daysFrom(today,7),freshFrom=daysFrom(today,-7);
  const personal=entries.filter(x=>!x.completed&&x.event_date>=today).sort((a,b)=>a.event_date.localeCompare(b.event_date));
  const futurePersonal=personal.filter(x=>x.event_date>dueSoon);
- const completedItems:InboxItem[]=entries.filter(x=>x.completed).sort((a,b)=>b.event_date.localeCompare(a.event_date)).map(x=>({id:'done-'+x.id,title:x.title,detail:`Completed reminder · ${dateLabel(x.event_date)}`,onOpen:()=>setEditing({...x})}));
+ // Completed transaction records remain visible after Back Office archives them.
+ // Keep personal completed reminders here as well, without mixing them into Activity.
+ const completedSaleItems:InboxItem[]=saleStages.filter(s=>s.rv_stage==='Completed'||s.rv_stage==='Archived').map(s=>({
+  id:'completed-sale-'+s.id,
+  title:s.address,
+  detail:s.rv_stage==='Archived'?'Completed transaction · Archived (read-only)':'Completed transaction · Closing in progress',
+  onOpen:()=>openDeal(s.id)
+ }));
+ const completedReminderItems:InboxItem[]=entries.filter(x=>x.completed).sort((a,b)=>b.event_date.localeCompare(a.event_date)).map(x=>({id:'done-'+x.id,title:x.title,detail:`Completed reminder · ${dateLabel(x.event_date)}`,onOpen:()=>setEditing({...x})}));
+ const completedItems:InboxItem[]=[...completedSaleItems,...completedReminderItems];
  const remaining=Math.max(0,goal-salesCount);
  const progressPercent=Math.min(100,Math.round(salesCount/Math.max(goal,1)*100));
  const progressMessage=remaining>0?`${remaining} sale${remaining===1?'':'s'} left this month`:salesCount>goal?`Goal exceeded by ${salesCount-goal} sale${salesCount-goal===1?'':'s'}!`:'Monthly goal achieved!';
@@ -156,7 +165,7 @@ export default function PersonalDates({userId,notify,brokerageHome=false,brokera
  // Brokerage recipients see the same three types of updates sent to Back Office.
  const activityItems=agentActivity;
  const acceptedItems:InboxItem[]=saleStages.filter(s=>s.rv_stage==='Accepted offer').map(s=>({id:'accepted-'+s.id,title:s.address,detail:'Accepted Offer · '+s.review_status,onOpen:()=>openDeal(s.id)}));
- const soldItems:InboxItem[]=saleStages.filter(s=>['Sold','Completed','Archived'].includes(s.rv_stage||'')).map(s=>({id:'sold-'+s.id,title:s.address,detail:(s.rv_stage==='Sold'?'Sold':s.rv_stage==='Archived'?'Sold · Archived':'Sold · Completed')+' · '+s.review_status,onOpen:()=>openDeal(s.id)}));
+ const soldItems:InboxItem[]=saleStages.filter(s=>s.rv_stage==='Sold').map(s=>({id:'sold-'+s.id,title:s.address,detail:'Sold · '+s.review_status,onOpen:()=>openDeal(s.id)}));
  const clientById=new Map(clients.map(c=>[c.id,c]));
  const clientEvents=[...clients.map(c=>({id:c.id,at:c.updated_at,title:c.created_at===c.updated_at?'New client':'Client updated',client:c})),...notes.filter(n=>clientById.has(n.contact_id)).map(n=>({id:n.contact_id,at:n.created_at,title:`${n.activity_type} recorded`,client:clientById.get(n.contact_id)!}))].sort((a,b)=>b.at.localeCompare(a.at));
  const uniqueClientEvents=clientEvents.filter((x,i,a)=>a.findIndex(y=>x.id===y.id)===i);
@@ -166,7 +175,7 @@ export default function PersonalDates({userId,notify,brokerageHome=false,brokera
   {key:'upcoming',label:'Upcoming',count:upcomingItems.length,items:upcomingItems,empty:'No upcoming transaction dates.'},
   {key:'activity',label:'Activity',count:activityItems.length,items:activityItems,empty:'No offer collapses, listing terminations or subject extensions.'},
   {key:'clients',label:'Clients',count:clientItems.filter(x=>x.unread).length,items:clientItems,empty:'No recent client activity.'},
-  {key:'completed',label:'Completed',count:completedItems.length,items:completedItems,empty:'No completed reminders yet.'},
+  {key:'completed',label:'Completed',count:completedItems.length,items:completedItems,empty:'No completed transactions or reminders yet.'},
   {key:'accepted',label:'Accepted Offer',count:acceptedItems.length,items:acceptedItems,empty:'No accepted offers.'},
   {key:'sold',label:'Sold',count:soldItems.length,items:soldItems,empty:'No sold files.'},
  ];
