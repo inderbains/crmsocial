@@ -9,10 +9,24 @@ const body=await req.json(),p=await db.from('office_agents').select('*').eq('id'
 const m=await db.from('brokerage_members').select('*').eq('user_id',u.data.user.id).single();const admin=m.data?.role==='admin'&&m.data.brokerage_id===a.brokerage_id;
 const app=Deno.env.get('APP_URL');if(!app)return reply({error:'Configure APP_URL'},503);
 if(body.action==='invite'){if(!admin)return reply({error:'Brokerage admin required'},403);if(a.status!=='Invited'||a.user_id)return reply({error:'Agent already enrolled'},409);
- const renewed=await db.from('office_agents').update({invitation_expires_at:new Date(Date.now()+14*86400000).toISOString()}).eq('id',a.id);if(renewed.error)throw renewed.error;const link=await db.auth.admin.generateLink({type:'magiclink',email:a.email,options:{redirectTo:app.replace(/\/+$/, '')+'/accept-invitation/'}});if(link.error)throw link.error;
- const existingMembership=await db.from('brokerage_members').select('user_id').eq('user_id',link.data.user.id).maybeSingle();if(existingMembership.error)throw existingMembership.error;if(existingMembership.data)return reply({error:'This email already has a RealVolt brokerage membership. Use a different email or request an authorized account transfer.'},409);
  const inviteUrl=new URL(app.replace(/\/+$/, '')+'/accept-invitation/');
  if(inviteUrl.protocol!=='https:'||inviteUrl.username||inviteUrl.password||inviteUrl.search||inviteUrl.hash)return reply({error:'APP_URL must be the deployed HTTPS application base URL'},503);
+ // Service-only RPC checks the exact invitation, administrator, and existing Auth identity.
+ const pre=await db.rpc('rv_invitation_preflight_092',{p_profile:a.id,p_admin:u.data.user.id});
+ if(pre.error)return reply({error:'Invitation unavailable or email already registered. Use a new email or contact platform support.'},409);
+ let invitedUid=pre.data as string|null;
+ if(!invitedUid){
+   const created=await db.auth.admin.createUser({email:a.email,email_confirm:false,app_metadata:{rv_invite_profile:a.id}});
+   if(created.error||!created.data.user)return reply({error:'This email could not be reserved. It may already be registered. Use a different email or contact platform support.'},409);
+   invitedUid=created.data.user.id;
+ }
+ // Recheck after creation. Never issue a magic link to an unrelated existing account.
+ const checked=await db.rpc('rv_invitation_preflight_092',{p_profile:a.id,p_admin:u.data.user.id});
+ if(checked.error||checked.data!==invitedUid)return reply({error:'Invitation identity could not be verified.'},409);
+ const renewed=await db.from('office_agents').update({invitation_expires_at:new Date(Date.now()+14*86400000).toISOString()}).eq('id',a.id).eq('status','Invited').is('user_id',null).select('id').maybeSingle();
+ if(renewed.error||!renewed.data)return reply({error:'Invitation no longer pending.'},409);
+ const link=await db.auth.admin.generateLink({type:'magiclink',email:a.email,options:{redirectTo:inviteUrl.toString()}});
+ if(link.error||link.data.user.id!==invitedUid||link.data.user.app_metadata?.rv_invite_profile!==a.id)return reply({error:'Could not create a secure invitation for the selected agent.'},409);
  const hash=link.data.properties.hashed_token;if(!hash)return reply({error:'Could not create a secure invitation'},502);
  inviteUrl.searchParams.set('invite',a.id);
  // Keep the one-time token out of server request URLs. The activation page exchanges it only after a deliberate click.
