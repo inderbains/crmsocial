@@ -3,6 +3,7 @@ import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import styles from './platform.module.css';
 import ManagementPanel from './management-panel';
+import AccountDirectory,{type DirectoryPerson} from './account-directory';
 
 type Account = {id:string;email:string|null;account_name:string;brokerage:string|null;brokerage_role:string|null;created_at:string;last_sign_in_at:string|null;verified:boolean;banned:boolean;platform_owner:boolean};
 type Overview = {generated_at:string; stats:Record<string,number>;matching_accounts:number;accounts:Account[];recent_admin_activity:{id:number;action:string;occurred_at:string}[]};
@@ -15,7 +16,8 @@ export default function PlatformAdmin(){
  const [phase,setPhase]=useState<'checking'|'login'|'verify'|'dashboard'>('checking');
  const [email,setEmail]=useState(''),[password,setPassword]=useState(''),[code,setCode]=useState('');
  const [busy,setBusy]=useState(false),[error,setError]=useState('');
- const [data,setData]=useState<Overview|null>(null),[search,setSearch]=useState(''),[applied,setApplied]=useState(''),[offset,setOffset]=useState(0);
+ const [focused,setFocused]=useState<DirectoryPerson|null>(null);
+ const [data,setData]=useState<Overview|null>(null),[applied,setApplied]=useState(''),[offset,setOffset]=useState(0);
  function getClient(){
   if(client.current)return client.current;
   const url=process.env.NEXT_PUBLIC_SUPABASE_URL,key=process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
@@ -25,7 +27,7 @@ export default function PlatformAdmin(){
   return client.current;
  }
  async function clear(explicit=false){
-  setData(null);setCode('');setPassword('');setEmail('');setOffset(0);setApplied('');setSearch('');setPhase('checking');setBusy(true);
+  setFocused(null);setData(null);setCode('');setPassword('');setEmail('');setOffset(0);setApplied('');setPhase('checking');setBusy(true);
   let revoked=false,signedOut=false;
   const sb=client.current;
   try{if(sb){if(explicit){try{const r=await sb.rpc('rv_platform_email_sign_out');revoked=!r.error&&r.data===true;}catch{/* still attempt Auth sign-out */}}
@@ -83,8 +85,8 @@ export default function PlatformAdmin(){
  {phase==='verify'&&<form className={styles.auth} onSubmit={verify}><h1>Check your email</h1><p>Enter the six-digit code sent to your registered platform owner email. It expires after 10 minutes.</p><label>Six-digit email code<input required inputMode="numeric" autoComplete="one-time-code" pattern="[0-9]{6}" maxLength={6} value={code} onChange={e=>setCode(e.target.value)}/></label><button disabled={busy}>{busy?'Verifying…':'Verify & open dashboard'}</button><button type="button" disabled={busy} onClick={()=>void resend()}>Resend code</button></form>}
  {phase==='dashboard'&&<><div className={styles.heading}><div><h1>Platform overview</h1><p>Account directory and aggregated usage. Private customer content is not available here.</p></div><button disabled={busy} onClick={()=>void refresh()}>Refresh</button></div>
  {data&&<><p className={styles.updated}>Updated {date(data.generated_at)} · Recent sign-ins are not a live online-user count.</p><div className={styles.grid}>{Object.entries(data.stats).map(([k,v])=><div className={styles.stat} key={k}><p>{labels[k]||k}</p><strong>{v.toLocaleString()}</strong></div>)}</div></>}
- <section className={styles.panel}><h2>Registered accounts</h2><form className={styles.search} onSubmit={e=>{e.preventDefault();void refresh(0,search);}}><input aria-label="Search accounts" placeholder="Search email or brokerage" value={search} onChange={e=>setSearch(e.target.value)}/><button disabled={busy}>Search</button></form>{data?<><div className={styles.table}><table><thead><tr>{['Name','Email','Brokerage','Role','Last sign-in','Account status'].map(x=><th key={x}>{x}</th>)}</tr></thead><tbody>{data.accounts.map(a=><tr key={a.id}><td>{a.account_name||'—'}</td><td>{a.email||'—'}</td><td>{a.brokerage||'Independent / none'}</td><td>{a.platform_owner?'Platform owner'+(a.brokerage_role?` · ${a.brokerage_role}`:''):a.brokerage_role||'Independent'}</td><td>{date(a.last_sign_in_at)}</td><td>{a.banned?'Sign-in blocked':a.verified?'Verified':'Unverified'}</td></tr>)}</tbody></table></div><div className={styles.pages}><span>{data.matching_accounts?offset+1:0}–{Math.min(offset+50,data.matching_accounts)} of {data.matching_accounts}</span><button disabled={busy||offset===0} onClick={()=>void refresh(Math.max(0,offset-50))}>Previous</button><button disabled={busy||offset+50>=data.matching_accounts} onClick={()=>void refresh(offset+50)}>Next</button></div></>:<p>Loading authorized data…</p>}</section>
- {data&&<ManagementPanel sb={getClient()} accounts={data.accounts}/> }
+ {data&&<AccountDirectory sb={getClient()} onManage={a=>{setFocused(a);window.requestAnimationFrame(()=>document.getElementById('rv-account-management')?.scrollIntoView({behavior:'smooth',block:'start'}));}} onChange={()=>{setFocused(null);void refresh(0,'');}}/>}
+ {data&&<div id="rv-account-management"><ManagementPanel sb={getClient()} accounts={focused?[focused,...data.accounts.filter(a=>a.id!==focused.id)]:data.accounts} focusId={focused?.id}/></div>}
  {data&&<section className={styles.panel}><h2>Recent platform access</h2>{data.recent_admin_activity.map(a=><div className={styles.log} key={a.id}><span>{a.action}</span><span>{date(a.occurred_at)}</span></div>)}</section>}
  </>}
  </div>;
