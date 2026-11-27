@@ -58,6 +58,7 @@ export default function MarketingLanding() {
   }, [mode, busy]);
 
   function openAuth(next: AuthMode, selected: Plan = 'agent') {
+    if (next === 'signup' && selected === 'brokerage') { window.location.assign('/?rv_brokerage=register'); return; }
     setPlan(selected);
     setError('');
     setNotice('');
@@ -264,7 +265,7 @@ export default function MarketingLanding() {
                 <div className={styles.price}><strong>$69.99</strong><span>CAD / agent / month</span></div>
                 <div className={styles.priceRule}/>
                 <div className={styles.priceFeatures}>{brokerageFeatures.map(item => <div key={item}><Check size={16}/><span>{item}</span></div>)}</div>
-                <button className={styles.priceAction} onClick={() => openAuth('signup', 'brokerage')}>Request brokerage access <ArrowRight size={18}/></button>
+                <button className={styles.priceAction} onClick={() => openAuth('signup', 'brokerage')}>Create brokerage account <ArrowRight size={18}/></button>
               </article>
             </div>
             <div className={styles.seatCalculator}>
@@ -298,6 +299,7 @@ export default function MarketingLanding() {
         <div className={styles.authDialog} role="dialog" aria-modal="true" aria-labelledby="rv-auth-heading">
           <div className={styles.authTop}><span className={styles.authLogo}><RealVoltLogo size="small"/></span><button type="button" className={styles.closeBtn} onClick={() => !busy && setMode(null)} aria-label="Close"><X size={21}/></button></div>
           <div className={styles.authHeading}><span className={styles.sectionKicker}>{mode === 'login' ? 'WELCOME BACK' : mode === 'reset' ? 'ACCOUNT RECOVERY' : 'WELCOME TO REALVOLT'}</span><h2 id="rv-auth-heading">{mode === 'login' ? 'Log in to your workspace.' : mode === 'reset' ? 'Reset your password.' : 'Create your RealVolt account.'}</h2><p>{mode === 'signup' ? (plan === 'brokerage' ? 'Start with a login. Brokerage subscription setup will follow when billing is available.' : 'Create a login and explore RealVolt. Subscription activation will follow when available.') : mode === 'reset' ? 'We’ll send a password reset link to your email address.' : 'Pick up right where you left off.'}</p></div>
+          {mode === 'signup' && <div style={{display:'grid',gap:8,marginTop:16}}><strong>Choose account type</strong><span style={{padding:12,border:'1px solid #b7cbb4',borderRadius:8,background:'#e7eddf'}}>Independent agent — selected</span><a href="/?rv_brokerage=register" style={{padding:12,border:'1px solid #b7cbb4',borderRadius:8,fontWeight:700,color:'#235e49'}}>Brokerage — create an office &amp; become administrator →</a></div>}
           <form className={styles.authForm} onSubmit={authenticate}>
             <label htmlFor="rv-auth-email">Email address</label>
             <input id="rv-auth-email" name="email" type="email" required autoComplete="email" placeholder="you@example.com"/>
