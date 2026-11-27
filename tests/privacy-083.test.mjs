@@ -1,0 +1,10 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {readFileSync} from 'node:fs';
+const sql=readFileSync(new URL('../supabase/083_privacy_guardrails.sql',import.meta.url),'utf8');
+const audit=readFileSync(new URL('../supabase/VERIFY_083_READ_ONLY.sql',import.meta.url),'utf8');
+test('old draft bypass removed, restrictive deal boundary',()=>{assert.match(sql,/DROP POLICY IF EXISTS brokerage_admin_profile_deals/);assert.match(sql,/rv083_deal_boundary ON public.deal_files AS RESTRICTIVE/);assert.match(sql,/review_status IN \('Submitted','Approved','Changes requested'\)/);assert.doesNotMatch(sql,/rv_stage\s*=\s*'Accepted offer'/)});
+test('private account data owner guard',()=>{for(const t of ['crm_contacts','agent_workspace_profiles','open_house_checkins','social_drafts','agent_personal_dates','rv_auto_email_drafts']) assert.ok(sql.includes(t));assert.match(sql,/AS RESTRICTIVE FOR ALL TO public USING \(%I=\(SELECT auth.uid\(\)\)\)/)});
+test('private storage and parent boundary',()=>{assert.match(sql,/SET public=false WHERE id='transaction-files'/);assert.match(sql,/f.path=storage.objects.name/);assert.match(sql,/rv083_parent_boundary/)});
+test('privileged marketing report revoked; leaderboard invoker scoped',()=>{assert.match(sql,/REVOKE EXECUTE ON FUNCTION %s FROM PUBLIC, anon, authenticated/);assert.match(sql,/SECURITY INVOKER/);assert.match(sql,/admin OR d.user_id=auth.uid\(\)/);assert.doesNotMatch(sql,/JOIN public.agent_workspace_profiles/)});
+test('catalog audit excludes data reads and mutations',()=>{assert.doesNotMatch(audit,/\b(UPDATE|DELETE|INSERT|ALTER|DROP)\s+(public|storage)\./i);assert.match(audit,/pg_policies/);assert.match(audit,/has_function_privilege/)});
