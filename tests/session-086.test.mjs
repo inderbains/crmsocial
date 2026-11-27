@@ -1,0 +1,10 @@
+import {readFileSync} from 'node:fs';
+import {test} from 'node:test';
+import assert from 'node:assert/strict';
+const page=readFileSync(new URL('../app/admin/page.tsx',import.meta.url),'utf8');
+const sql=readFileSync(new URL('../supabase/086_platform_admin_signout.sql',import.meta.url),'utf8');
+test('dedicated tab storage',()=>{assert.match(page,/storageKey:ADMIN_STORAGE_KEY,storage:window.sessionStorage,persistSession:true/);assert.match(page,/detectSessionInUrl:false/)});
+test('restore requires server verification before loading data',()=>{const restore=page.split('async function restore()')[1].split('void restore()')[0];assert.ok(restore.indexOf("rpc('rv_platform_email_verified')")<restore.indexOf("rpc('rv_platform_admin_overview'"));assert.match(restore,/verified.data!==true/)});
+test('explicit logout revokes verification and clears local state',()=>{assert.match(page,/void clear\(true\)/);assert.match(page,/rpc\('rv_platform_email_sign_out'\)/);assert.match(page,/signOut\(\{scope:'local'\}\)/);assert.match(page,/sessionStorage.removeItem\(ADMIN_STORAGE_KEY\)/)});
+test('history snapshot hidden and reloaded',()=>{assert.match(page,/style.visibility='hidden'/);assert.match(page,/if\(e.persisted\)\{hide\(\);window.location.reload\(\);\}/)});
+test('server revocation scoped to current user and session',()=>{assert.match(sql,/public.rv_platform_email_context\(\)/);assert.match(sql,/WHERE user_id=auth.uid\(\) AND session_id::text=auth.jwt\(\)->>'session_id'/);assert.match(sql,/verified_until=NULL/);assert.match(sql,/FROM PUBLIC, anon, authenticated/)});
