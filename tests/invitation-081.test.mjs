@@ -1,0 +1,10 @@
+import {test} from 'node:test';
+import assert from 'node:assert/strict';
+import {readFileSync} from 'node:fs';
+const root=new URL('../',import.meta.url);
+const read=p=>readFileSync(new URL(p,root),'utf8');
+const page=read('app/accept-invitation/page.tsx'),edge=read('supabase/functions/agent-office/index.ts'),sql=read('supabase/081_agent_invitation_activation.sql');
+test('new invitation bypasses public landing redirect and avoids token in query',()=>{assert.match(edge,/\/accept-invitation\//);assert.match(edge,/inviteUrl\.hash=new URLSearchParams\(\{token_hash:hash\}\)/);assert.doesNotMatch(edge,/properties\.action_link/);assert.match(edge,/inviteUrl\.toString\(\)/)});
+test('activation deliberately verifies email then sets password before linking account',()=>{assert.match(page,/verifyOtp\(\{token_hash:token.current,type:'email'\}\)/);assert.match(page,/persistSession:false/);assert.match(page,/readOnly value=\{invite.email\}/);assert.ok(page.indexOf('auth.updateUser({password})')<page.indexOf("rpc('rv_accept_invitation'"));assert.ok(page.indexOf("rpc('rv_accept_invitation'")<page.indexOf('normal.auth.setSession'))});
+test('server selects invited brokerage and blocks existing membership and expiry',()=>{assert.match(sql,/p.email is distinct from lower\(trim\(u.email\)\)/);assert.match(sql,/p.invitation_expires_at<now\(\)/);assert.match(sql,/exists\(select 1 from public.brokerage_members where user_id=u.id\)/);assert.match(sql,/values\(u.id,p.brokerage_id,'agent'\);/);assert.match(sql,/actual is distinct from p_expected/);assert.match(sql,/where id=auth.uid\(\) for update/);assert.doesNotMatch(sql,/on conflict\(user_id\) do nothing/)});
+test('email providers and existing billing actions remain present',()=>{for(const s of ['GMAIL_APP_PASSWORD','RESEND_API_KEY','checkout','portal','STRIPE_SECRET_KEY'])assert.ok(edge.includes(s))});

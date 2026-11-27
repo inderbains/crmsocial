@@ -9,11 +9,17 @@ const body=await req.json(),p=await db.from('office_agents').select('*').eq('id'
 const m=await db.from('brokerage_members').select('*').eq('user_id',u.data.user.id).single();const admin=m.data?.role==='admin'&&m.data.brokerage_id===a.brokerage_id;
 const app=Deno.env.get('APP_URL');if(!app)return reply({error:'Configure APP_URL'},503);
 if(body.action==='invite'){if(!admin)return reply({error:'Brokerage admin required'},403);if(a.status!=='Invited'||a.user_id)return reply({error:'Agent already enrolled'},409);
- const renewed=await db.from('office_agents').update({invitation_expires_at:new Date(Date.now()+14*86400000).toISOString()}).eq('id',a.id);if(renewed.error)throw renewed.error;const link=await db.auth.admin.generateLink({type:'magiclink',email:a.email,options:{redirectTo:app.replace(/\/+$/, '')+'/workspace/?onboard='+encodeURIComponent(a.id)}});if(link.error)throw link.error;
+ const renewed=await db.from('office_agents').update({invitation_expires_at:new Date(Date.now()+14*86400000).toISOString()}).eq('id',a.id);if(renewed.error)throw renewed.error;const link=await db.auth.admin.generateLink({type:'magiclink',email:a.email,options:{redirectTo:app.replace(/\/+$/, '')+'/accept-invitation/'}});if(link.error)throw link.error;
  const existingMembership=await db.from('brokerage_members').select('user_id').eq('user_id',link.data.user.id).maybeSingle();if(existingMembership.error)throw existingMembership.error;if(existingMembership.data)return reply({error:'This email already has a RealVolt brokerage membership. Use a different email or request an authorized account transfer.'},409);
+ const inviteUrl=new URL(app.replace(/\/+$/, '')+'/accept-invitation/');
+ if(inviteUrl.protocol!=='https:'||inviteUrl.username||inviteUrl.password||inviteUrl.search||inviteUrl.hash)return reply({error:'APP_URL must be the deployed HTTPS application base URL'},503);
+ const hash=link.data.properties.hashed_token;if(!hash)return reply({error:'Could not create a secure invitation'},502);
+ inviteUrl.searchParams.set('invite',a.id);
+ // Keep the one-time token out of server request URLs. The activation page exchanges it only after a deliberate click.
+ inviteUrl.hash=new URLSearchParams({token_hash:hash}).toString();
  // The invitation link is sensitive: it must only be sent through the selected provider,
  // never returned to the browser, stored in logs, or included in debug messages.
- const inviteText=`Hello ${a.full_name},\n\nYour brokerage has invited you to RealVolt. Open the secure link to sign in and complete your profile:\n\n${link.data.properties.action_link}\n\nOnce signed in, review your commission plan and fees securely inside RealVolt.\n\nIf you did not expect this invitation, contact your brokerage.`;
+ const inviteText=`Hello ${a.full_name},\n\nYour brokerage has invited you to RealVolt. Open the secure link to verify your email, create a password and accept your brokerage invitation:\n\n${inviteUrl.toString()}\n\nOnce signed in, review your commission plan and fees securely inside RealVolt.\n\nIf you did not expect this invitation, contact your brokerage.`;
  const provider=(Deno.env.get('INVITATION_EMAIL_PROVIDER')||'resend').trim().toLowerCase();
  if(provider==='gmail'){
    const gmailUser=(Deno.env.get('GMAIL_SMTP_USER')||'').trim();
