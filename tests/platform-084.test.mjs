@@ -1,0 +1,11 @@
+import {readFileSync} from 'node:fs';
+import {test} from 'node:test';
+import assert from 'node:assert/strict';
+const sql=readFileSync(new URL('../supabase/084_platform_admin.sql',import.meta.url),'utf8');
+const page=readFileSync(new URL('../app/admin/page.tsx',import.meta.url),'utf8');
+test('owner identity is verified and bound to auth user UUID',()=>{assert.match(sql,/matches<>1/);assert.match(sql,/email_confirmed_at IS NOT NULL/);assert.match(sql,/a\.user_id=auth\.uid\(\)/);});
+test('server overview requires owner and MFA before reading',()=>{assert.match(sql,/IF NOT public\.rv_platform_admin_allowed\(\) OR coalesce\(auth\.jwt\(\)->>'aal',''\) <> 'aal2'/);assert.match(sql,/REVOKE ALL ON FUNCTION public\.rv_platform_admin_overview\(integer,text\) FROM PUBLIC, anon, authenticated/);});
+test('private allowlist cannot be changed by users',()=>{assert.match(sql,/REVOKE ALL ON SCHEMA rv_platform_private FROM PUBLIC, anon, authenticated/);assert.match(sql,/ALTER TABLE rv_platform_private\.admins ENABLE ROW LEVEL SECURITY/);assert.match(sql,/REVOKE ALL ON ALL TABLES IN SCHEMA rv_platform_private FROM PUBLIC, anon, authenticated/);});
+test('no private content or destructive reset',()=>{assert.match(sql,/SELECT count\(\*\) FROM public\.crm_contacts/);assert.doesNotMatch(sql,/DELETE FROM|TRUNCATE|DROP TABLE|encrypted_password|service_role/i);});
+test('dedicated session and MFA client flow',()=>{assert.match(page,/persistSession:false/);assert.match(page,/detectSessionInUrl:false/);assert.match(page,/scope:'local'/);assert.match(page,/challengeAndVerify/);assert.match(page,/permission\.data!==true/);});
+test('overview is paginated and audited',()=>{assert.match(sql,/LIMIT 50 OFFSET skip_rows/);assert.match(sql,/INSERT INTO rv_platform_private\.audit/);});
