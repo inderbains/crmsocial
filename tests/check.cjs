@@ -1,0 +1,5 @@
+const {test}=require('node:test'), a=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path');const r=p=>fs.readFileSync(path.join(__dirname,'..',p),'utf8');const e=r('supabase/functions/agent-office/index.ts'),h=r('app/page.tsx'),u=r('app/accept-invitation/page.tsx'),s=r('supabase/094_require_invited_password.sql');
+test('clickable HTML for both providers',()=>{a.equal((e.match(/html:inviteHtml/g)||[]).length,2);a.match(e,/<a href="\$\{safeUrl\}"/);a.match(e,/const safeUrl=esc/)});
+test('root activation and token fragment',()=>{a.match(e,/set\('rv_agent','activate'\)/);a.match(e,/inviteUrl.hash=/);a.match(h,/route==='agent'\)return <AcceptInvitation/);a.match(h,/q.has\('onboard'\)/)});
+test('password and membership',()=>{a.match(s,/nullif\(u.encrypted_password,''\)/);a.match(u,/password!==confirm/);a.match(u,/Login username \(verified email address\)/);a.ok(u.indexOf('auth.updateUser({password})')<u.indexOf("db.rpc('rv_accept_invitation'"))});
+test('brokerage path preserved',()=>{a.match(h,/BrokerageActivation mode=\{route\}/);a.match(s,/values\(u.id,p.brokerage_id,'agent'\)/)});

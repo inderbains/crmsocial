@@ -9,7 +9,7 @@ const body=await req.json(),p=await db.from('office_agents').select('*').eq('id'
 const m=await db.from('brokerage_members').select('*').eq('user_id',u.data.user.id).single();const admin=m.data?.role==='admin'&&m.data.brokerage_id===a.brokerage_id;
 const app=Deno.env.get('APP_URL');if(!app)return reply({error:'Configure APP_URL'},503);
 if(body.action==='invite'){if(!admin)return reply({error:'Brokerage admin required'},403);if(a.status!=='Invited'||a.user_id)return reply({error:'Agent already enrolled'},409);
- const inviteUrl=new URL(app.replace(/\/+$/, '')+'/accept-invitation/');
+ const inviteUrl=new URL(app.replace(/\/+$/, '')+'/');
  if(inviteUrl.protocol!=='https:'||inviteUrl.username||inviteUrl.password||inviteUrl.search||inviteUrl.hash)return reply({error:'APP_URL must be the deployed HTTPS application base URL'},503);
  // Service-only RPC checks the exact invitation, administrator, and existing Auth identity.
  const pre=await db.rpc('rv_invitation_preflight_092',{p_profile:a.id,p_admin:u.data.user.id});
@@ -28,12 +28,16 @@ if(body.action==='invite'){if(!admin)return reply({error:'Brokerage admin requir
  const link=await db.auth.admin.generateLink({type:'magiclink',email:a.email,options:{redirectTo:inviteUrl.toString()}});
  if(link.error||link.data.user.id!==invitedUid||link.data.user.app_metadata?.rv_invite_profile!==a.id)return reply({error:'Could not create a secure invitation for the selected agent.'},409);
  const hash=link.data.properties.hashed_token;if(!hash)return reply({error:'Could not create a secure invitation'},502);
+ inviteUrl.searchParams.set('rv_agent','activate');
  inviteUrl.searchParams.set('invite',a.id);
  // Keep the one-time token out of server request URLs. The activation page exchanges it only after a deliberate click.
  inviteUrl.hash=new URLSearchParams({token_hash:hash}).toString();
  // The invitation link is sensitive: it must only be sent through the selected provider,
  // never returned to the browser, stored in logs, or included in debug messages.
  const inviteText=`Hello ${a.full_name},\n\nYour brokerage has invited you to RealVolt. Open the secure link to verify your email, create a password and accept your brokerage invitation:\n\n${inviteUrl.toString()}\n\nOnce signed in, review your commission plan and fees securely inside RealVolt.\n\nIf you did not expect this invitation, contact your brokerage.`;
+ const esc=(v:string)=>v.replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]||c));
+ const safeUrl=esc(inviteUrl.toString());
+ const inviteHtml=`<div style="font-family:Arial,sans-serif;max-width:560px;margin:auto;padding:28px;color:#193e32"><h2 style="font-size:26px">realvolt.</h2><h1 style="font-size:24px">You're invited to RealVolt</h1><p>Hello ${esc(String(a.full_name||'Agent'))},</p><p>Your brokerage has invited you to join its RealVolt workspace. Verify your invited email, create your password and accept your brokerage invitation.</p><p style="margin:28px 0"><a href="${safeUrl}" style="display:inline-block;background:#193e32;color:white;padding:15px 22px;border-radius:8px;text-decoration:none;font-weight:bold">Accept invitation &amp; create profile</a></p><p style="font-size:13px">If the button does not open, copy this entire link into your browser:</p><p style="font-size:12px;overflow-wrap:anywhere;word-break:break-all"><a href="${safeUrl}">${safeUrl}</a></p><p>If you did not expect this invitation, contact your brokerage. Keep this one-time link private.</p></div>`;
  const provider=(Deno.env.get('INVITATION_EMAIL_PROVIDER')||'resend').trim().toLowerCase();
  if(provider==='gmail'){
    const gmailUser=(Deno.env.get('GMAIL_SMTP_USER')||'').trim();
@@ -49,7 +53,7 @@ if(body.action==='invite'){if(!admin)return reply({error:'Brokerage admin requir
    try{
      const receipt=await smtp.sendMail({
        from:{name:'RealVolt Invitations',address:gmailUser},to:a.email,
-       subject:'Your brokerage invitation to RealVolt', text:inviteText
+       subject:'Your brokerage invitation to RealVolt', text:inviteText, html:inviteHtml
      });
      if(!receipt.accepted?.length) throw new Error('Recipient was not accepted');
    }catch(e){
@@ -61,7 +65,7 @@ if(body.action==='invite'){if(!admin)return reply({error:'Brokerage admin requir
    if(!key||!from) return reply({error:'Configure invitation email sender'},503);
    const r=await fetch('https://api.resend.com/emails',{
      method:'POST',headers:{Authorization:'Bearer '+key,'Content-Type':'application/json','Idempotency-Key':'agent-invite/'+a.id+'/'+String(body.request_id||crypto.randomUUID())},
-     body:JSON.stringify({from,to:[a.email],subject:'Your brokerage invitation to RealVolt',text:inviteText})
+     body:JSON.stringify({from,to:[a.email],subject:'Your brokerage invitation to RealVolt',text:inviteText,html:inviteHtml})
    });
    if(!r.ok) return reply({error:'Invitation email was rejected by Resend'},502);
  }else{return reply({error:'Set INVITATION_EMAIL_PROVIDER to gmail or resend'},503)}

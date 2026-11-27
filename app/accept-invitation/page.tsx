@@ -81,7 +81,7 @@ export default function AcceptInvitation(){
   {stage==='form'&&invite&&<><h1>Create your agent profile</h1><p>Create your account and accept your brokerage invitation.</p><form onSubmit={accept} className={styles.form}>
    <label>Assigned brokerage (locked)<input readOnly value={invite.brokerage_name} /></label>
    <label>Full name<input required autoComplete="name" value={name} onChange={e=>setName(e.target.value)} /></label>
-   <label>Email address (verified)<input type="email" readOnly value={invite.email} autoComplete="username" /></label>
+   <label>Login username (verified email address)<input type="email" readOnly value={invite.email} autoComplete="username" /></label>
    <div className={styles.two}><label>Phone (optional)<input autoComplete="tel" value={phone} onChange={e=>setPhone(e.target.value)}/></label><label>Licence number (optional)<input value={licence} onChange={e=>setLicence(e.target.value)}/></label></div>
    <label>Create password<input type="password" required minLength={12} autoComplete="new-password" value={password} onChange={e=>setPassword(e.target.value)}/></label>
    <label>Confirm password<input type="password" required minLength={12} autoComplete="new-password" value={confirm} onChange={e=>setConfirm(e.target.value)}/></label>
