@@ -63,7 +63,7 @@ export default function PlatformAdmin(){
   return()=>{active=false;window.removeEventListener('pagehide',hide);window.removeEventListener('pageshow',show);if(client.current)void client.current.auth.stopAutoRefresh();};
  },[]);
  async function load(start=0,query=''){
-  setData(null);const {data:payload,error:e}=await getClient().rpc('rv_platform_admin_overview',{p_offset:start,p_search:query});
+  const {data:payload,error:e}=await getClient().rpc('rv_platform_admin_overview',{p_offset:start,p_search:query});
   if(e||!payload){await clear();throw new Error('Platform access could not be verified. Sign in again.');}
   setData(payload as Overview);setOffset(start);setApplied(query);setPhase('dashboard');
  }
