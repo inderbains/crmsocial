@@ -1,6 +1,8 @@
-RealVolt Fix 114 — Separate agent directory and invitations
-Requires Fix 110 and existing invitation/office migrations. Includes Fix 111 reset and Fix 113 directory; Fix 112 optional. No change to payment or transaction modules.
-1. Run supabase/114_archive_agent.sql in Supabase SQL Editor, then VERIFY_114_READ_ONLY.sql. Four true values expected.
-2. Upload app/back-office.tsx and app/AgentDirectory113.module.css into existing app folder on GitHub. No Edge Function changes.
-3. Test Add agent, save only, send invitation, accept in separate account, refresh directory, edit, cancel pending invite, archive eligible active agent.
-Archive is not permanent deletion or full account offboarding. Membership row and historical records retained; existing Inactive access rules apply. Existing card subscription must be resolved separately. Open submitted transactions and authorized payouts block archive; no new billing accrual is performed by archive. Full database and live browser testing pending.
+RealVolt Fix 115 — Focused Agent Management
+Based on Fix 114. Includes its app changes, including separate Active / Pending / Former lists and archive actions. Requires existing Fix 110 and earlier office/invitation changes.
+1. If Fix 114 SQL is NOT installed, run supabase/114_archive_agent.sql then VERIFY_114_READ_ONLY.sql (4 true checks). These are unchanged from Fix 114. If already installed, skip SQL.
+2. Replace app/back-office.tsx and app/AgentDirectory113.module.css in the existing app folder. Do not upload these files to the repository root. No edge function changes.
+3. After successful Hostinger build, hard-refresh. Agent Management directory and editor both display Agent Management · 115. If absent, verify the deployed commit.
+4. Test Active/Pending/Former, Add agent (editor alone; no list under it), Cancel (returns to original screen), Save profile (Pending), Save & send invitation (Pending, invitation sent), invitation acceptance in separate agent account, refresh (Active), edit, archive eligible agent. Existing archive restrictions apply.
+5. Existing compensation fields, save logic, accounting and transaction flows preserved; no new SQL or bank operations. External profile navigation consumed once so refresh does not reopen closed profile.
+Validation: TypeScript transpile and source assertions, comparison of financial branches/imports with Fix 114. No production build, live database or browser testing performed.
