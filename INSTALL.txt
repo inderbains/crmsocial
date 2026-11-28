@@ -1,29 +1,7 @@
-REALVOLT FIX 105 — Agent-recorded Trust receipt (includes Fix 104 application files)
-
-Scope: automatically post a full, actual client deposit recorded by the agent to the brokerage Trust ledger; no bank-account selection by the agent. Default General account is preselected for the existing external commission-receipt workflow. The separate authorized completion, trust disbursement and agent-payout workflow is unchanged. No bank API or physical bank movement is implemented.
-
-Install in a staging copy of Supabase first. Requires Fix 059 and subsequent transaction/compliance/security migrations, including 095, 099, 102, 103. If 102 or 103 SQL is missing, install the corresponding original SQL from Fix 104 before applying this patch. Do not rerun older transaction/security migrations over newer versions.
-
-1. Run the contents of the following SQL files individually in NEW Supabase SQL Editor queries, in order:
-   105a_default_bank_accounts.sql
-   105b_received_deposit_fields.sql
-   105c_post_received_deposit.sql
-   105d_receipt_and_firm_submission.sql
-   VERIFY_105_READ_ONLY.sql (all five booleans must be true).
-   Do not proceed if a query fails. Each migration is separate and transactional.
-2. Open the existing app folder in GitHub. Upload ALL nine .tsx files from the app folder in this ZIP. Do not upload these files at repository root. Commit together, then verify Hostinger's build.
-3. Back Office > Trust & bank: select the Trust account. Set it as the default if there are multiple active Trust accounts. If exactly one active Trust account exists, it is selected automatically. Optionally set the Operating account as default General. A General account is never used for a client deposit.
-4. Agent > Transactions > Remove subjects / direct sold: attach required documents, enter amount and deposit holder. Check 'Full deposit actually received into brokerage Trust' only for actual received funds; record the actual receipt date. Submit. A positive receipt posts in the same DB transaction as firm-sale submission. A contractual deposit not received remains pending. For a previously submitted firm sale with no attested receipt or existing ledger, the agent can record the actual receipt date on the transaction once (requires linked deposit receipt document). No old deposits are invented or backfilled by this migration.
-5. Check the transaction summary and Trust & bank ledger. No duplicate Back Office confirmation on a posted receipt. If posting was blocked because there is no active/unambiguous Trust account or an accounting period issue, the saved receipt is retained and an authorized reviewer can retry posting after resolving the issue. Existing ledger entries on the same sale or original listing are not automatically reallocated; review them in accounting. Do not post a second manual entry for a receipt already posted. Partial deposits, historical corrections and reversals require the accounting workflow; the attested deposit fields are locked against silent edits.
-
-Staging tests (not executed against live Supabase):
-- A received $100,000 deposit with one active Trust account increases its recorded ledger by $100,000; General unchanged.
-- Another brokerage holding the deposit produces no ledger receipt.
-- Unreceived contractual deposit produces no ledger receipt.
-- Existing ledger or a repeated RPC does not create another automatic receipt.
-- Missing/multiple default accounts and frozen periods yield an explicit pending status, not a wrong account or false posting.
-- Agent cannot post on another agent's sale, choose an account, alter receipt metadata, or read bank ledgers; cross-brokerage access rejected.
-- An unverified/unsigned receipt document must not be treated as bank reconciliation; review the evidence and match the actual bank statement separately.
-- Confirm existing commission, document, CIR and Back Office workflows still work.
-
-Validation in this package: TypeScript transpile syntax checks, relative import resolution against the uploaded repository, targeted source assertions. No database server, live Supabase execution or full Next.js production build available here. Review with your brokerage accounting lead before production use.
+Fix 106 — Integrated Trust-to-General commission transfer. Requires installed Fix 105 and prior accounting migrations. Staging first.
+1. Run 106a_transfer_guard.sql then 106b_record_commission_transfer.sql in separate SQL Editor queries, copying each entire file. Stop on errors.
+2. Replace app/transaction-commission-payout.tsx inside the existing app folder in GitHub. Redeploy.
+3. Open an approved legally completed sale with actual deposit already recorded in Trust. Verify calculated own-side commission plus GST, original Trust account and default General account. Record actual authorized transfer date and bank reference only once the bank movement has occurred. Both ledger entries and the verified flag are committed together.
+4. Review the calculated agent split and deductions, then authorize and record payout.
+This update supports a single full trust receipt on the sale with no earlier releases or General receipts, sufficient funds for full own-side commission and an unambiguous General account. Historical manual postings, prior releases, shortfalls, partial receipts, reversals, and separate lawyer/cooperating brokerage disbursements require accounting review. Does not initiate bank transfers or release client funds. Existing verified historical records remain unchanged.
+Validation: TS transpile syntax and relative imports checked, static SQL source assertions only. No full production build or live database execution. Test exact retry, insufficient trust, locked period, wrong brokerage/reviewer, old verification action blocked, and atomic rollback when General entry fails.

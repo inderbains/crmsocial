@@ -1,0 +1,1 @@
+SELECT to_regprocedure('public.rv106_record_commission_transfer(uuid,date,text)') IS NOT NULL AS transfer_ready, EXISTS(SELECT 1 FROM pg_trigger WHERE tgrelid='public.deal_files'::regclass AND tgname='rv106_guard_transfer' AND NOT tgisinternal) AS guard_ready;
