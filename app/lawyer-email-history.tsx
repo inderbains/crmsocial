@@ -1,0 +1,12 @@
+'use client';
+import {useEffect,useState} from 'react';
+import {getSupabase} from '../lib/supabase';
+type Delivery={id:string;recipient_email:string;recipient_name:string;side:string;status:string;created_at:string;created_by:string;provider_id:string|null;error:string|null;sender:string|null;reply_to:string|null;subject:string|null;attachment_names:string[]};
+export default function LawyerEmailHistory({dealId,revision=0,title='Lawyer correspondence — compliance history'}:{dealId:string;revision?:number;title?:string}){
+ const [rows,setRows]=useState<Delivery[]>([]),[error,setError]=useState(''),[loading,setLoading]=useState(true);const db=getSupabase()!;
+ useEffect(()=>{let live=true;let busy=false;setRows([]);setError('');setLoading(true);
+  async function load(){if(busy)return;busy=true;try{const r=await db.rpc('rv_lawyer_email_history_097',{p_deal:dealId});if(!live)return;if(r.error){setRows([]);setError(r.error.message)}else{setRows((r.data||[]) as Delivery[]);setError('')}}catch(e){if(live){setRows([]);setError((e as Error).message)}}finally{busy=false;if(live)setLoading(false)}}
+  void load();const timer=window.setInterval(()=>void load(),15000);return()=>{live=false;window.clearInterval(timer)};
+ },[db,dealId,revision]);
+ return <section className="panel" style={{marginTop:18}} aria-label={title}><h3>{title}</h3><p className="hint">Read-only correspondence record. Dates are recorded send-attempt times; provider acceptance is not proof of inbox delivery.</p>{loading?<p>Loading email history…</p>:error?<p role="alert" className="notice">Unable to load email history: {error}</p>:!rows.length?<p>No recorded lawyer emails for this transaction.</p>:rows.map(h=><details key={h.id} style={{borderBottom:'1px solid #dce5dc',padding:'12px 0'}}><summary style={{cursor:'pointer',fontWeight:700}}>{h.side==='seller'?'Seller’s':'Buyer’s'} lawyer · {h.recipient_email} · {h.status==='accepted'?'Accepted by provider':h.status==='pending'?'Pending / unconfirmed':'Failed'} · {new Date(h.created_at).toLocaleString()}</summary><p><b>Recipient:</b> {h.recipient_name} — {h.recipient_email}</p><p><b>From:</b> {h.sender||'Not recorded'} · <b>Reply-to:</b> {h.reply_to||'Not recorded'}</p><p><b>Subject:</b> {h.subject||'Not recorded'}</p><p><b>Sent by account:</b> {h.created_by}</p><p><b>Provider reference:</b> {h.provider_id||'Not available'}</p><p><b>Attachments:</b></p><ul>{(h.attachment_names||[]).map((n,i)=><li key={i}>{n}</li>)}</ul>{h.error&&<p role="alert">{h.error}</p>}</details>)}</section>;
+}

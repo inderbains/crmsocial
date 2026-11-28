@@ -12,6 +12,7 @@ import {transactionLabel} from '../lib/agent-reports';
 import type {Lawyer} from '../lib/lawyers';
 import ComplianceClosingPanel from './compliance-closing-panel';
 import ClosingPanel from './closing-panel';
+import LawyerEmailHistory from './lawyer-email-history';
 import TransactionCommissionPayout from './transaction-commission-payout';
 import {calculateClosing,money} from '../supabase/functions/_shared/calculations.mjs';
 import {downloadName,makeClosedFileZip,saveLocalBlob,type ArchiveZipFile} from './closed-file-download';
@@ -432,6 +433,7 @@ export default function Transactions({userId,backOffice,view,notify,initialDealI
    <summary style={{cursor:'pointer',fontWeight:700,fontSize:17}}>Advanced compliance records — expand</summary>
    <DealAdmin agentName={fileOwnerName} kind={active.kind} canAllocate={false} key={active.id+'-'+active.updated_at+'-'+documentRevision} dealId={active.id} status={active.review_status} backOffice={true} docs={docs} defaultCommission={Number(active.representation==='listing'?active.listing_commission:active.selling_commission)} defaultGST={Math.round(Number(active.representation==='listing'?active.listing_commission:active.selling_commission)*Number(active.gst_rate))/100} notify={notify}/>
   </details>}
+ {backOffice&&active.kind==='Sale'&&['Sold','Completed','Archived'].includes(active.rv_stage||'')&&<details style={{marginTop:14,border:'1px solid #cedcd1',borderRadius:11,padding:12}}><summary style={{cursor:'pointer',fontWeight:700,fontSize:17}}>Compliance — lawyer email history</summary><LawyerEmailHistory key={active.id} dealId={active.id}/></details>}
  {backOffice&&active.rv_stage==='Completed'&&<section aria-label="Closing transaction actions" className="panel" style={{marginTop:18}}>
   <h3>Final action — Close / Archive file</h3>
   <p className="hint">Complete commission receipt, authorized payout, and any final compliance checks before closing this transaction.</p>
