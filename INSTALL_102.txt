@@ -1,0 +1,11 @@
+RealVolt Fix 102 — Transaction Trust Deposit Receipt
+
+Prerequisites: installed existing Trust & Bank schema (010), current transaction workflow and privacy patches, and Fix 101 application files. Test in staging first. Do not post fictional receipts on a production account.
+
+1. Supabase SQL Editor: open supabase/102_transaction_trust_receipt.sql and run its entire contents. This only creates a restricted RPC, and does not insert money or alter historical ledger entries.
+2. GitHub: upload app/transactions.tsx (based on Fix 101) and app/transaction-trust-receipt.tsx. Deploy and check the production build. No Edge Function update.
+3. Back Office: open a firm sale, Submitted or Approved, where deposit holder is Our Brokerage. Save the actual deposit amount in the transaction. Select the Trust account (automatically selected when exactly one active account exists), actual deposit date and bank reference. Confirm only if the funds were actually deposited. Click Confirm deposit & post to Trust.
+4. Trust & Bank: select the same Trust account and verify the new ledger receipt and recorded balance. General/Operating does not receive this client deposit. Bank statement matching remains separate. In the same sale, the receipt panel will now display existing entries instead of permitting another receipt.
+5. Test repeat submission, different brokerage/agent accounts, wrong account type, locked accounting period, and a sale with existing ledger entries. Exact RPC retries return the same ledger ID; conflicting entries or any existing trust entries on linked listing block posting. This action is for a single full receipt matching the saved deposit, not installments or reallocation. Manual ledger posting is unchanged and must not be used to post the same receipt again. Trust release and commission transfers are unchanged.
+
+Validated: TS/TSX syntax only, and inspected SQL against the saved 010 schema and 101 transaction UI. Not run against live Supabase or a full production build. No bank transfer is initiated.
