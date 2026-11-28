@@ -1,10 +1,29 @@
-RealVolt — Fix 104 consolidated upload (Fixes 101–103)
-Based on the supplied crmsocial-main (10).zip, which contains the Fix 100 transaction file.
+REALVOLT FIX 105 — Agent-recorded Trust receipt (includes Fix 104 application files)
 
-GITHUB: Navigate INTO the existing app folder and upload the six files from this package's app folder together. Replace the three existing files and add the three missing files. Do not upload these TSX files into the root of the repository. If the live repository contains misplaced root copies of transactions.tsx, transaction-trust-receipt.tsx or transaction-deposit-summary.tsx, remove those root copies only. They are absent from the supplied snapshot.
+Scope: automatically post a full, actual client deposit recorded by the agent to the brokerage Trust ledger; no bank-account selection by the agent. Default General account is preselected for the existing external commission-receipt workflow. The separate authorized completion, trust disbursement and agent-payout workflow is unchanged. No bank API or physical bank movement is implemented.
 
-SUPABASE: The two original SQL scripts are included for reference and installation if not already applied. Check 102 then 103 in SQL Editor; do not assume a file uploaded to GitHub is installed in Supabase. No new SQL changes are introduced by this package.
+Install in a staging copy of Supabase first. Requires Fix 059 and subsequent transaction/compliance/security migrations, including 095, 099, 102, 103. If 102 or 103 SQL is missing, install the corresponding original SQL from Fix 104 before applying this patch. Do not rerun older transaction/security migrations over newer versions.
 
-Redeploy on Hostinger and test transaction display, lawyer suggestions, trust receipt posting and privacy. Do not post the same deposit twice.
+1. Run the contents of the following SQL files individually in NEW Supabase SQL Editor queries, in order:
+   105a_default_bank_accounts.sql
+   105b_received_deposit_fields.sql
+   105c_post_received_deposit.sql
+   105d_receipt_and_firm_submission.sql
+   VERIFY_105_READ_ONLY.sql (all five booleans must be true).
+   Do not proceed if a query fails. Each migration is separate and transactional.
+2. Open the existing app folder in GitHub. Upload ALL nine .tsx files from the app folder in this ZIP. Do not upload these files at repository root. Commit together, then verify Hostinger's build.
+3. Back Office > Trust & bank: select the Trust account. Set it as the default if there are multiple active Trust accounts. If exactly one active Trust account exists, it is selected automatically. Optionally set the Operating account as default General. A General account is never used for a client deposit.
+4. Agent > Transactions > Remove subjects / direct sold: attach required documents, enter amount and deposit holder. Check 'Full deposit actually received into brokerage Trust' only for actual received funds; record the actual receipt date. Submit. A positive receipt posts in the same DB transaction as firm-sale submission. A contractual deposit not received remains pending. For a previously submitted firm sale with no attested receipt or existing ledger, the agent can record the actual receipt date on the transaction once (requires linked deposit receipt document). No old deposits are invented or backfilled by this migration.
+5. Check the transaction summary and Trust & bank ledger. No duplicate Back Office confirmation on a posted receipt. If posting was blocked because there is no active/unambiguous Trust account or an accounting period issue, the saved receipt is retained and an authorized reviewer can retry posting after resolving the issue. Existing ledger entries on the same sale or original listing are not automatically reallocated; review them in accounting. Do not post a second manual entry for a receipt already posted. Partial deposits, historical corrections and reversals require the accounting workflow; the attested deposit fields are locked against silent edits.
 
-Validation: all relative imports of the six patched files resolve in the supplied snapshot plus patch; TypeScript syntax checked. Full build and live database tests not performed.
+Staging tests (not executed against live Supabase):
+- A received $100,000 deposit with one active Trust account increases its recorded ledger by $100,000; General unchanged.
+- Another brokerage holding the deposit produces no ledger receipt.
+- Unreceived contractual deposit produces no ledger receipt.
+- Existing ledger or a repeated RPC does not create another automatic receipt.
+- Missing/multiple default accounts and frozen periods yield an explicit pending status, not a wrong account or false posting.
+- Agent cannot post on another agent's sale, choose an account, alter receipt metadata, or read bank ledgers; cross-brokerage access rejected.
+- An unverified/unsigned receipt document must not be treated as bank reconciliation; review the evidence and match the actual bank statement separately.
+- Confirm existing commission, document, CIR and Back Office workflows still work.
+
+Validation in this package: TypeScript transpile syntax checks, relative import resolution against the uploaded repository, targeted source assertions. No database server, live Supabase execution or full Next.js production build available here. Review with your brokerage accounting lead before production use.

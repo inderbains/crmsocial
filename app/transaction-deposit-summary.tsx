@@ -2,7 +2,7 @@
 import {useEffect,useState} from 'react';
 import {getSupabase} from '../lib/supabase';
 
-type Deal={id:string;kind:string;rv_stage:string|null;review_status:string;representation?:string;brokerage_id:string|null;deposit_amount?:number|null;deposit_holder?:string|null;deposit_brokerage?:string|null;deposit_due_date?:string|null;rv_post_firm_details_confirmed?:boolean;updated_at?:string};
+type Deal={id:string;kind:string;rv_stage:string|null;review_status:string;representation?:string;brokerage_id:string|null;deposit_amount?:number|null;deposit_holder?:string|null;deposit_brokerage?:string|null;deposit_due_date?:string|null;rv_post_firm_details_confirmed?:boolean;updated_at?:string;rv105_received_on?:string|null;rv105_receipt_status?:string|null;rv105_receipt_ledger_id?:string|null};
 type TrustRow={record_scope:'sale'|'linked_listing';account_label:string;has_positive_balance:boolean};
 type Result={rows:TrustRow[];loading:boolean;error:boolean};
 const money=(n:number)=>new Intl.NumberFormat('en-CA',{style:'currency',currency:'CAD'}).format(n);
@@ -41,12 +41,13 @@ export default function TransactionDepositSummary({deal,revision,backOffice}:{de
    {deal.kind==='Sale'&&<>
     <div><div className="hint">Contract deposit (CAD)</div><strong>{known&&Number.isFinite(amount)?money(amount):'Not recorded yet'}</strong></div>
     <div><div className="hint">Deposit holder</div><strong>{own?'Our brokerage — Trust':external?(deal.deposit_brokerage?.trim()||'Other brokerage — name not recorded'):'Not recorded yet'}</strong></div>
+    {deal.rv105_received_on&&<div><div className="hint">Actual receipt date</div><strong>{deal.rv105_received_on}</strong></div>}
     <div><div className="hint">Deposit due date</div><strong>{deal.deposit_due_date||'Not recorded'}</strong></div>
-    <div><div className="hint">Trust ledger account(s)</div><strong>{eligible&&result.loading?'Checking ledger…':eligible&&result.error?'Unable to verify — refresh or contact Back Office':sale.length?sale.map(r=>r.account_label).join(', '):own?(eligible?'Not posted / assigned yet':'Pending Back Office confirmation'):external?'Not held by our brokerage':'Not recorded yet'}</strong></div>
-    <div><div className="hint">Receipt / ledger status</div><strong>{eligible&&result.loading?'Checking…':eligible&&result.error?'Not verified':sale.length?(external?'Trust entries exist — review holder discrepancy':sale.some(r=>r.has_positive_balance)?'Trust funds recorded — bank reconciliation separate':'Trust entries recorded — no positive balance on this sale'):linked.length?'Entries on original listing — review allocation':own?(amount===0?'No deposit amount due':'Awaiting Back Office receipt confirmation'):external?'External deposit — no internal receipt expected':'Deposit details pending'}</strong></div>
+    <div><div className="hint">Trust ledger account(s)</div><strong>{eligible&&result.loading?'Checking ledger…':eligible&&result.error?'Unable to verify — refresh or contact Back Office':sale.length?sale.map(r=>r.account_label).join(', '):own?(eligible?'Not posted / assigned yet':'Pending actual receipt'):external?'Not held by our brokerage':'Not recorded yet'}</strong></div>
+    <div><div className="hint">Receipt / ledger status</div><strong>{eligible&&result.loading?'Checking…':eligible&&result.error?'Not verified':sale.length?(external?'Trust entries exist — review holder discrepancy':sale.some(r=>r.has_positive_balance)?'Trust funds recorded — bank reconciliation separate':'Trust entries recorded — no positive balance on this sale'):linked.length?'Entries on original listing — review allocation':own?(amount===0?'No deposit amount due':deal.rv105_received_on?'Receipt recorded — ledger posting pending':'Awaiting actual receipt date'):external?'External deposit — no internal receipt expected':'Deposit details pending'}</strong></div>
    </>}
   </div>
   {deal.kind==='Sale'&&linked.length>0&&<p className="hint" style={{marginBottom:0}}>Original listing Trust entries: {linked.map(r=>r.account_label).join(', ')}. These are not automatically allocated to this sale.</p>}
-  {deal.kind==='Sale'&&<p className="hint" style={{marginBottom:0}}>Contract deposit is not proof of receipt. Only an authorized Back Office user can record actual Trust funds. This summary does not show the brokerage bank balance.</p>}
+  {deal.kind==='Sale'&&<p className="hint" style={{marginBottom:0}}>Contract deposit is not proof of receipt. An agent records the actual receipt once; bank reconciliation remains a Back Office responsibility. This summary does not show the brokerage bank balance.</p>}
  </section>;
 }

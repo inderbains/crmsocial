@@ -43,6 +43,7 @@ export default function TransactionActions({deal,docs,agentName,office,linked,no
  const [sellerLawyer,setSellerLawyer]=useState<LawyerEntry>(emptyLawyer());
  const [financial,setFinancial]=useState({listing_commission:0,selling_commission:0,gst_rate:5,deposit_amount:0,deposit_holder:'' as ''|'our_brokerage'|'other_brokerage',deposit_brokerage:''});
  const [date,setDate]=useState(brokerageDay());
+ const [depositReceived,setDepositReceived]=useState(false),[receivedOn,setReceivedOn]=useState('');
  const [document,setDocument]=useState('');
  const [newDocs,setNewDocs]=useState<DocumentRef[]>([]);
  const [firmFiles,setFirmFiles]=useState<FirmFiles>({...EMPTY_FIRM});
@@ -57,24 +58,25 @@ export default function TransactionActions({deal,docs,agentName,office,linked,no
  useEffect(()=>{void db.from('brokerage_lawyers').select('*').order('name').then(r=>{if(!r.error)setLawyers(r.data||[])})},[db]);
  const dualCommission=Boolean(deal.parent_listing_id);
  const singleListing=!dualCommission&&deal.representation==='listing';
+ const receiptReady=!depositReceived||(financial.deposit_holder==='our_brokerage'&&financial.deposit_amount>0&&!!receivedOn&&receivedOn<=brokerageDay());
  const validMoney=[financial.listing_commission,financial.selling_commission,financial.gst_rate,financial.deposit_amount].every(n=>Number.isFinite(n)&&n>=0)
   &&financial.gst_rate<=100&&(dualCommission?financial.listing_commission+financial.selling_commission>0:singleListing?financial.listing_commission>0:financial.selling_commission>0)
-  &&Boolean(financial.deposit_holder)&&(financial.deposit_holder!=='other_brokerage'||Boolean(financial.deposit_brokerage.trim()));
+  &&Boolean(financial.deposit_holder)&&(financial.deposit_holder!=='other_brokerage'||Boolean(financial.deposit_brokerage.trim()))&&receiptReady;
  const money=(n:number)=>new Intl.NumberFormat('en-CA',{style:'currency',currency:'CAD'}).format(Number(n)||0);
  const gross=dualCommission?financial.listing_commission+financial.selling_commission:singleListing?financial.listing_commission:financial.selling_commission;
  const gst=Math.round(gross*financial.gst_rate)/100;
  const readyLawyers=hasLawyer(buyerLawyer)&&hasLawyer(sellerLawyer);
- const setAmount=(k:'listing_commission'|'selling_commission'|'gst_rate'|'deposit_amount',value:string)=>setFinancial(v=>({...v,[k]:Number(value)}));
+ const setAmount=(k:'listing_commission'|'selling_commission'|'gst_rate'|'deposit_amount',value:string)=>{setFinancial(v=>({...v,[k]:Number(value)}));if(k==='deposit_amount'&&Number(value)<=0){setDepositReceived(false);setReceivedOn('')}};
  function resetAction(){
   setAction('');setFirmStep(1);setSaleOutcome('subject_removed');setDate(brokerageDay());setDocument('');setNewDocs([]);setNote('');
   setFirmFiles({...EMPTY_FIRM});setFirmSaved({});setAddendums([]);setAddendumsSaved({});
-  setExtensionFile(null);setExtensionSaved('');
+  setExtensionFile(null);setExtensionSaved('');setDepositReceived(false);setReceivedOn('');
  }
  useEffect(()=>{
   setAction(initialDirectSold?'firm':'');setFirmStep(1);setSaleOutcome(initialDirectSold?'direct_sold':'subject_removed');setDocument('');setNewDocs([]);setNote('');setDate(brokerageDay());
   setFinancial({listing_commission:Number(deal.listing_commission||0),selling_commission:Number(deal.selling_commission||0),gst_rate:Number(deal.gst_rate??5),deposit_amount:Number(deal.deposit_amount||0),deposit_holder:deal.deposit_holder||'',deposit_brokerage:deal.deposit_brokerage||''});setBuyerLawyer(emptyLawyer());setSellerLawyer(emptyLawyer());
   setFirmFiles({...EMPTY_FIRM});setFirmSaved({});setAddendums([]);setAddendumsSaved({});
-  setExtensionFile(null);setExtensionSaved('');
+  setExtensionFile(null);setExtensionSaved('');setDepositReceived(false);setReceivedOn('');
  },[deal.id,initialDirectSold]);
  useEffect(()=>{if(office&&deal.review_status==='Submitted')void db.rpc('rv_tx_action',{p_deal:deal.id,p_action:'seen'})},[office,deal.id,deal.review_status,deal.updated_at,db]);
  const approved=deal.review_status==='Approved';
@@ -101,7 +103,7 @@ export default function TransactionActions({deal,docs,agentName,office,linked,no
  function chooseAction(next:ActionName|''){
   setDate(brokerageDay());setSaleOutcome('subject_removed');setFirmStep(1);setDocument('');setNewDocs([]);setNote('');
   setFirmFiles({...EMPTY_FIRM});setFirmSaved({});setAddendums([]);setAddendumsSaved({});
-  setExtensionFile(null);setExtensionSaved('');
+  setExtensionFile(null);setExtensionSaved('');setDepositReceived(false);setReceivedOn('');
   setAction(next);
  }
  const firmFields=fields.filter(field=>!field.representation||field.representation===deal.representation);
@@ -192,15 +194,16 @@ export default function TransactionActions({deal,docs,agentName,office,linked,no
    }
    setSavingLabel('Recording transaction action…');
    const response=action==='firm'
-    ?await db.rpc('rv059_submit_firm_with_details',{p_deal:deal.id,p_date:date,p_document:selectedDocument,p_outcome:saleOutcome,p_buyer_lawyer:buyerLawyerId,p_seller_lawyer:sellerLawyerId,p_listing_commission:dualCommission||singleListing?financial.listing_commission:0,p_selling_commission:singleListing?0:financial.selling_commission,p_gst_rate:financial.gst_rate,p_deposit_amount:financial.deposit_amount,p_deposit_holder:financial.deposit_holder,p_deposit_brokerage:financial.deposit_brokerage})
+    ?await db.rpc('rv105_submit_firm_with_receipt',{p_deal:deal.id,p_date:date,p_document:selectedDocument,p_outcome:saleOutcome,p_buyer_lawyer:buyerLawyerId,p_seller_lawyer:sellerLawyerId,p_listing_commission:dualCommission||singleListing?financial.listing_commission:0,p_selling_commission:singleListing?0:financial.selling_commission,p_gst_rate:financial.gst_rate,p_deposit_amount:financial.deposit_amount,p_deposit_holder:financial.deposit_holder,p_deposit_brokerage:financial.deposit_brokerage,p_received_on:financial.deposit_holder==='our_brokerage'&&depositReceived?receivedOn:null})
     :action==='extend_subject'||action==='collapse'
     ?await db.rpc('rv056_offer_update',{p_deal:deal.id,p_action:action,p_date:action==='extend_subject'?date:null,p_document:action==='extend_subject'?selectedDocument||null:null})
     :action==='archive'
     ?await db.rpc('rv_close_compliant_file',{p_deal:deal.id})
     :await db.rpc('rv_tx_action',{p_deal:deal.id,p_action:action,p_date:needsDate?date:null,p_document:selectedDocument||null,p_note:note});
    if(response.error)throw response.error;
+   const receiptMessage=action==='firm'&&response.data==='posted'?' Deposit automatically posted to Trust.':action==='firm'&&response.data==='bank_setup_required'?' Receipt saved; Back Office must configure its Trust account.':action==='firm'&&['existing_entries','accounting_period_review'].includes(String(response.data))?' Receipt saved; Trust ledger requires Back Office review. No duplicate posted.':'';
    resetAction();await reload();
-   notify(action==='collapse'?'Offer collapsed. The linked listing is active again. Back Office notified; no compliance review required.':action==='firm'?'Firm sale, documents, GST, commission, deposit holder and both lawyers submitted together for Back Office approval.':action==='extend_subject'?'Subject extension recorded. Back Office notified; no compliance approval needed.':'Transaction updated.');
+   notify((action==='collapse'?'Offer collapsed. The linked listing is active again. Back Office notified; no compliance review required.':action==='firm'?'Firm sale, documents, GST, commission, deposit holder and both lawyers submitted together for Back Office approval.':action==='extend_subject'?'Subject extension recorded. Back Office notified; no compliance approval needed.':'Transaction updated.')+receiptMessage);
   }catch(err){notify((err as Error).message)}
   finally{setBusy(false);setSavingLabel('')}
  }
@@ -250,11 +253,12 @@ export default function TransactionActions({deal,docs,agentName,office,linked,no
      {!singleListing&&<div className="field"><label htmlFor="rv-selling-commission">{dualCommission?`Selling Realtor side${deal.cooperating_agent?' · '+deal.cooperating_agent:''}`:'Realtor'} — commission before GST (CAD)</label><input id="rv-selling-commission" type="number" min="0" step="0.01" required value={financial.selling_commission} onChange={e=>setAmount('selling_commission',e.target.value)}/></div>}
      <div className="field"><label htmlFor="rv-commission-gst-rate">Applicable commission GST rate (%)</label><input id="rv-commission-gst-rate" type="number" min="0" max="100" step="0.01" required value={financial.gst_rate} onChange={e=>setAmount('gst_rate',e.target.value)}/></div>
      <div className="field"><label htmlFor="rv-deposit-amount">Deposit amount (CAD)</label><input id="rv-deposit-amount" type="number" min="0" step="0.01" required value={financial.deposit_amount} onChange={e=>setAmount('deposit_amount',e.target.value)}/></div>
-     <div className="field"><label htmlFor="rv-deposit-held-by">Deposit held by (Required)</label><select id="rv-deposit-held-by" required value={financial.deposit_holder} onChange={e=>setFinancial(v=>({...v,deposit_holder:e.target.value as typeof v.deposit_holder}))}><option value="">Choose deposit holder</option><option value="our_brokerage">Our brokerage — trust account</option><option value="other_brokerage">Other brokerage</option></select></div>
+     <div className="field"><label htmlFor="rv-deposit-held-by">Deposit held by (Required)</label><select id="rv-deposit-held-by" required value={financial.deposit_holder} onChange={e=>{setFinancial(v=>({...v,deposit_holder:e.target.value as typeof v.deposit_holder}));setDepositReceived(false);setReceivedOn('')}}><option value="">Choose deposit holder</option><option value="our_brokerage">Our brokerage — trust account</option><option value="other_brokerage">Other brokerage</option></select></div>
      {financial.deposit_holder==='other_brokerage'&&<div className="field"><label htmlFor="rv-deposit-brokerage">Other brokerage holding deposit (Required)</label><input id="rv-deposit-brokerage" required value={financial.deposit_brokerage} onChange={e=>setFinancial(v=>({...v,deposit_brokerage:e.target.value}))}/></div>}
     </div>
+    {financial.deposit_holder==='our_brokerage'&&financial.deposit_amount>0&&<div className="field"><label style={{display:'flex',gap:8,alignItems:'center'}}><input type="checkbox" style={{width:'auto'}} checked={depositReceived} onChange={e=>{setDepositReceived(e.target.checked);if(!e.target.checked)setReceivedOn('')}}/>Full deposit actually received into brokerage Trust</label>{depositReceived&&<label>Actual receipt date<input type="date" required max={brokerageDay()} value={receivedOn} onChange={e=>setReceivedOn(e.target.value)}/></label>}<p className="hint">No bank selection needed. If received, the attached deposit receipt and actual date automatically post to the brokerage's Trust ledger when you submit. Otherwise the deposit stays pending.</p></div>}
     <div className="notice"><strong>Commission before GST:</strong> {money(gross)} · <strong>GST:</strong> {money(gst)} · <strong>Total including GST:</strong> {money(gross+gst)}{dualCommission&&<p>Listing side: {money(financial.listing_commission)} + GST {money(Math.round(financial.listing_commission*financial.gst_rate)/100)} · Selling side: {money(financial.selling_commission)} + GST {money(Math.round(financial.selling_commission*financial.gst_rate)/100)}</p>}</div>
-    <p className="hint">Use the GST rate applicable to this transaction and verify tax-registration status before authorizing an agent payout. Choosing “Our brokerage” records the deposit holder but does not falsely mark bank funds received; Back Office must reconcile the actual trust deposit.</p>
+    <p className="hint">Use the GST rate applicable to this transaction and verify tax-registration status before authorizing an agent payout. Only mark the full deposit received when it has actually been received into Trust. Back Office reconciles the bank statement separately.</p>
     <div className="actions"><button type="button" className="btn" onClick={()=>setFirmStep(1)}>← Documents</button><button type="button" className="btn primary" disabled={!validMoney} onClick={()=>setFirmStep(3)}>Next: Lawyer contacts →</button></div>
    </div>}
    {action==='firm'&&firmStep===3&&<div className="panel" style={{marginTop:12}}>

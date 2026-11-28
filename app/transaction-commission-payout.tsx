@@ -35,7 +35,8 @@ export default function TransactionCommissionPayout({deal,agentName,docs,notify,
   if(failed?.error){setError(failed.error.message);return}
   setPayouts(p.data||[]);setAccounts(a.data||[]);setCommission(c.data||null);setReceiptLedger(l.data||[]);setError('');
   const operating=(a.data||[]).filter((item:any)=>item.kind==='Operating'&&item.active!==false);
-  if(operating.length===1)setReceiptAccount(previous=>previous||operating[0].id);
+  const preferred=operating.find((item:any)=>item.rv105_default===true)||(operating.length===1?operating[0]:undefined);
+  setReceiptAccount(previous=>operating.some((item:any)=>item.id===previous)?previous:preferred?.id||'');
  },[db,deal.id,deal.brokerage_id]);
  useEffect(()=>{void load()},[load]);
  async function execute(name:string,args:Record<string,unknown>,message:string){
@@ -74,7 +75,7 @@ export default function TransactionCommissionPayout({deal,agentName,docs,notify,
   </div>}
   {internalDeposit&&!deal.rv_funds_verified&&<div className="notice">
    <b>1. Confirm authorized trust commission transfer</b>
-   <p>Deposit held in our brokerage: record the actual trust receipt and authorized trust-to-general transfer in Trust & Bank first. Do not post a second operating receipt for the same money.</p>
+   <p>Deposit held in our brokerage: The agent-recorded client deposit posts automatically to Trust. Record the authorized trust-to-general commission transfer in Trust & Bank after legal completion. Do not post a second operating receipt for the same money.</p>
    <label>Verified trust / commission-transfer reference<input value={receiptReference} onChange={e=>setReceiptReference(e.target.value)} placeholder="Trust ledger transfer and authorization reference"/></label>
    <button type="button" className="btn primary" disabled={busy||receiptReference.trim().length<6} onClick={()=>{if(confirm('Have you verified the actual trust receipt and authorized commission disbursement in Trust & Bank?'))void execute('rv_tx_action',{p_deal:deal.id,p_action:'funds',p_note:receiptReference.trim()},'Trust commission release confirmed. Verify recorded trust and general ledger movements in Bank Reconciliation.')}}>Confirm authorized commission receipt</button>
   </div>}
