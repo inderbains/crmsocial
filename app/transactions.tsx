@@ -11,7 +11,7 @@ import DealAdmin from './deal-admin';
 import DirectFileReview from './direct-file-review';
 import {transactionLabel} from '../lib/agent-reports';
 import type {Lawyer} from '../lib/lawyers';
-import ComplianceClosingPanel from './compliance-closing-panel';
+import AutomaticCommissionStatement from './automatic-commission-statement';
 import ClosingPanel from './closing-panel';
 import LawyerEmailHistory from './lawyer-email-history';
 import TransactionCommissionPayout from './transaction-commission-payout';
@@ -432,11 +432,11 @@ export default function Transactions({userId,backOffice,view,notify,initialDealI
   </section>}
 
  {backOffice&&active.rv_stage==='Completed'&&<TransactionCommissionPayout key={active.id} deal={active} agentName={fileOwnerName} docs={docs} notify={notify} onChanged={refreshFile}/>}
- {backOffice&&active.kind==='Sale'&&active.rv_stage==='Completed'&&<ComplianceClosingPanel agentName={fileOwnerName} key={active.id+'-'+documentRevision} deal={active} docs={docs} office={true} notify={notify} onSaved={refreshFile}/>}
  {backOffice&&(['Approved','Completed'].includes(active.review_status)||(active.kind==='Sale'&&active.rv_stage==='Archived'))&&
   <details id="rv-file-compliance-review" style={{scrollMarginTop:24,marginTop:14,border:'1px solid #cedcd1',borderRadius:11,padding:12}}>
    <summary style={{cursor:'pointer',fontWeight:700,fontSize:17}}>Advanced compliance records — expand</summary>
    {active.rv_stage!=='Archived'&&<DealAdmin agentName={fileOwnerName} kind={active.kind} canAllocate={false} key={active.id+'-'+active.updated_at+'-'+documentRevision} dealId={active.id} status={active.review_status} backOffice={true} docs={docs} defaultCommission={Number(active.representation==='listing'?active.listing_commission:active.selling_commission)} defaultGST={Math.round(Number(active.representation==='listing'?active.listing_commission:active.selling_commission)*Number(active.gst_rate))/100} notify={notify}/>}
+   {active.kind==='Sale'&&['Completed','Archived'].includes(active.rv_stage||'')&&<AutomaticCommissionStatement key={active.id} dealId={active.id} stage={active.rv_stage} completionDate={active.rv_completed_date} revision={documentRevision} onSaved={refreshFile}/>}
    {active.kind==='Sale'&&['Sold','Completed','Archived'].includes(active.rv_stage||'')&&<LawyerEmailHistory key={active.id} dealId={active.id} revision={emailHistoryRevision} title="Lawyer email history"/>}
   </details>}
  {backOffice&&active.rv_stage==='Completed'&&<section aria-label="Closing transaction actions" className="panel" style={{marginTop:18}}>

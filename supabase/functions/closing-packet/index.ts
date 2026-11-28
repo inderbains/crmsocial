@@ -15,13 +15,33 @@ Deno.serve(async(req:Request)=>{
  const url=Deno.env.get('SUPABASE_URL')!,key=Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
  const db=createClient(url,key,{auth:{persistSession:false,autoRefreshToken:false}});
  const auth=await db.auth.getUser(token);if(auth.error||!auth.data.user)return reply({error:'Invalid session'},401);
- const body=await req.json();if(!['preview','send'].includes(body.action)||!['buyer','seller'].includes(body.side))return reply({error:'Invalid action or lawyer side'},400);
+ const body=await req.json();if(!['preview','send','commission_statement'].includes(body.action)||(body.action!=='commission_statement'&&!['buyer','seller'].includes(body.side)))return reply({error:'Invalid action or lawyer side'},400);
  const deal=await db.from('deal_files').select('*').eq('id',body.deal_id).single();if(deal.error)return reply({error:'Transaction unavailable'},404);const d=deal.data;
  const member=await db.from('brokerage_members').select('*').eq('user_id',auth.data.user.id).single();
  const owner=await db.from('brokerage_members').select('*').eq('user_id',d.user_id).single();
  const assignment=await db.from('transaction_reviewers').select('admin_id').eq('agent_id',d.user_id).single();
  if(member.error||owner.error||assignment.error||member.data.role!=='admin'||member.data.brokerage_id!==d.brokerage_id||owner.data.brokerage_id!==d.brokerage_id||assignment.data.admin_id!==auth.data.user.id)return reply({error:'Only the assigned admin in this brokerage can prepare or send closing documents'},403);
  if(d.kind!=='Sale'||!['Sold','Completed'].includes(d.rv_stage)||d.review_status!=='Approved')return reply({error:'Approve the firm sale before preparing closing documents'},409);
+ if(body.action==='commission_statement'){
+  if(d.rv_stage!=='Completed'||!d.rv_funds_verified||!d.rv_completion_letter||!d.rv_completed_date||d.rv_deleted_at)return reply({error:'Confirm legal completion and actual commission receipt first'},409);
+  const result=await db.from('agent_payouts').select('id,deal_id,brokerage_id,profile_id,gross,gst,deductions,net,status,paid_date,payment_reference,ledger_id').eq('deal_id',d.id).eq('brokerage_id',d.brokerage_id).maybeSingle();
+  if(result.error)throw result.error;const p=result.data;
+  if(!p||p.status!=='Paid')return reply({status:'awaiting_payment'});
+  if(!p.paid_date||!p.ledger_id)return reply({error:'Recorded payout is missing a payment date or accounting entry'},409);
+  const agent=await db.from('office_agents').select('full_name').eq('id',p.profile_id).eq('brokerage_id',d.brokerage_id).eq('user_id',d.user_id).single();if(agent.error)throw agent.error;
+  const brokerage=await db.from('brokerages').select('name').eq('id',d.brokerage_id).single();if(brokerage.error)throw brokerage.error;
+  const path=`rv-system/${d.id}/completion/commission-${p.id}.pdf`;
+  const existing=await db.from('deal_documents').select('id').eq('deal_id',d.id).eq('path',path).maybeSingle();if(existing.error)throw existing.error;
+  const cad=(n:unknown)=>new Intl.NumberFormat('en-CA',{style:'currency',currency:'CAD'}).format(Number(n));
+  const lines=['REALVOLT | PRIVATE BROKERAGE RECORD','INTERNAL COMMISSION PAYABLE STATEMENT','',`Brokerage: ${brokerage.data.name}`,`Realtor: ${agent.data.full_name}`,`Property: ${d.address}`,`Transaction: ${d.transaction_number||d.id}`,`Legal completion: ${d.rv_completed_date||'-'}`,'',`Agent commission: ${cad(p.gross)}`,`GST: ${cad(p.gst)}`,`Deductions: ${cad(p.deductions)}`,`Net payment recorded: ${cad(p.net)}`,'',`Payment date: ${p.paid_date}`,`Payment reference: ${p.payment_reference||'-'}`,`Payout ID: ${p.id}`,'','Confidential - for this brokerage and assigned agent only.','Figures reflect the recorded payout; not confirmation of bank clearance.'];
+  if(!existing.data){
+   const bytes=await textPDF(lines.join('\n'),`${p.paid_date}T00:00:00Z`);
+   const uploaded=await db.storage.from('transaction-files').upload(path,bytes,{contentType:'application/pdf',upsert:false});
+   if(uploaded.error){const already=await db.storage.from('transaction-files').download(path);if(already.error)throw uploaded.error;}
+  }
+  const registered=await db.rpc('rv099_register_statement',{p_deal:d.id,p_actor:auth.data.user.id,p_payout:p.id});if(registered.error)throw registered.error;
+  return reply({status:'saved',document_id:registered.data,created:!existing.data});
+ }
  const b=await db.from('brokerages').select('*').eq('id',d.brokerage_id).single();if(b.error)throw b.error;
  const extra=String(body.instructions||'').trim();if(extra.length>8000)return reply({error:'Instructions are too long'},400);
  const template=await db.from('office_document_templates').select('*').eq('brokerage_id',d.brokerage_id).maybeSingle();if(template.error)throw template.error;const texts=packetTexts(d,{...b.data,...template.data},body.side,extra),recipient=d[body.side+'_lawyer'];

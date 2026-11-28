@@ -1,0 +1,10 @@
+const fs=require('fs'),assert=require('node:assert/strict'),path=require('path');
+const root=path.join(__dirname,'..');const read=f=>fs.readFileSync(path.join(root,f),'utf8');
+const t=read('app/transactions.tsx'),c=read('app/automatic-commission-statement.tsx'),e=read('supabase/functions/closing-packet/index.ts'),s=read('supabase/099_automatic_commission_statement.sql'),b=read('app/transaction-commission-payout.tsx');
+assert(!t.includes('ComplianceClosingPanel'));assert(t.includes('<AutomaticCommissionStatement'));console.log('1: manual panel removed, automatic section mounted');
+assert(c.indexOf("payment.data?.status!=='Paid'")<c.indexOf("action:'commission_statement'"));assert(e.includes("p.status!=='Paid'"));assert(s.includes("p.status<>'Paid'"));console.log('2: paid-payout checks in UI, server and SQL');
+assert(e.indexOf("assignment.data.admin_id!==auth.data.user.id")<e.indexOf("if(body.action==='commission_statement')"));assert(s.includes("TO service_role"));assert(s.includes('FROM PUBLIC,anon,authenticated'));console.log('3: server and reviewer permission checks');
+assert(e.includes('upsert:false'));assert(s.includes('FOR UPDATE'));assert(s.includes('WHERE deal_id=d.id AND path=file_path'));console.log('4: deterministic path, no overwrite and serialized registration');
+assert(s.includes('rv099_statement_before_archive'));assert(s.includes("OLD.rv_stage='Completed'"));console.log('5: new close guard scoped to completed sale');
+assert(b.includes("rv072_receive_commission_funds"));assert(b.includes("a.kind==='Operating'"));assert(b.includes('trust-to-general'));console.log('6: receipt RPC and trust/operating account distinction preserved');
+assert(t.includes('<LawyerEmailHistory'));assert(e.includes("body.action==='preview'"));assert(e.includes('safeLabel'));console.log('7: existing lawyer email flow retained');
