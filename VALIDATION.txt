@@ -1,18 +1,12 @@
-PASS agent firm submit includes receipt date, not bank selection
-PASS default accounts scoped by brokerage and kind
-PASS saved receipt only, owner and brokerage required
-PASS internal receipt function not exposed to authenticated callers
-PASS locks and duplicate checks before positive Trust ledger insert
-PASS no auto posting into frozen periods and no bank-account guess
-PASS receipt metadata and amount locked, no separate normal Back Office confirm
-PASS syntax/imports app/back-office.tsx
-PASS syntax/imports app/lawyer-choice.tsx
-PASS syntax/imports app/lawyer-directory.tsx
-PASS syntax/imports app/manual-contact-input.tsx
-PASS syntax/imports app/transaction-actions.tsx
-PASS syntax/imports app/transaction-commission-payout.tsx
-PASS syntax/imports app/transaction-deposit-summary.tsx
-PASS syntax/imports app/transaction-trust-receipt.tsx
-PASS syntax/imports app/transactions.tsx
-
-Limitations: source checks and transpilation only; no live database execution or production build.
+PASS syntax/imports: agent-charges-110.tsx
+PASS syntax/imports: agent-full-statement-110.tsx
+PASS syntax/imports: agent-reports.tsx
+PASS syntax/imports: back-office-dashboard.tsx
+PASS syntax/imports: back-office.tsx
+PASS syntax/imports: office-agent-profile.tsx
+PASS syntax/imports: office-bank-reconciliation.tsx
+PASS syntax/imports: office-expense-report-109.tsx
+PASS syntax/imports: private-agent-expenses-109.tsx
+PASS syntax/imports: realvolt-workspace.tsx
+PASS 11 targeted source assertions
+PASS 10 additional targeted source assertions

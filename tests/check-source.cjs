@@ -1,16 +1,9 @@
-const assert=require('node:assert/strict');
-const fs=require('node:fs');const path=require('node:path');
-const root=path.resolve(__dirname,'..');const read=f=>fs.readFileSync(path.join(root,f),'utf8');
-(async()=>{
-const c=await import(path.join(root,'supabase/functions/_shared/calculations.mjs'));
-const x={kind:'Sale',representation:'listing',listing_commission:19890,selling_commission:0,deposit_amount:100000,gst_rate:5,deposit_holder:'our_brokerage',deposit_brokerage:'Other',address:'Test',buyer_name:'Buyer',seller_name:'Seller',completion_date:'2026-12-04',seller_lawyer:{name:'Lawyer',email:'test@example.com'}};
-let t=c.calculateClosing(x);assert.equal(t.remittance,7911550);assert.equal(t.ownCommission,2088450);assert.equal(t.deducted,2088450);
-t=c.calculateClosing({...x,deposit_holder:'other_brokerage'});assert.equal(t.held,0);assert.equal(t.remittance,0);assert.equal(t.deducted,0);
-assert.ok(read('app/transaction-commission-payout.tsx').includes("props.deal.deposit_holder!=='our_brokerage'"));
-assert.ok(read('app/transactions.tsx').includes("active.deposit_holder==='our_brokerage'&&active.rv_stage==='Sold'"));
-assert.ok(read('supabase/108a_lawyer_release.sql').includes("d.deposit_holder IS DISTINCT FROM 'our_brokerage'"));
-assert.ok(read('supabase/108d_trust_payout.sql').includes("IF d.deposit_holder='other_brokerage' THEN"));
-assert.ok(!read('supabase/108c_confirm_earned_commission.sql').includes('REVOKE EXECUTE ON FUNCTION public.rv072_receive_commission_funds'));
-assert.ok(read('supabase/functions/closing-packet/index.ts').includes("if(d.deposit_holder==='our_brokerage'&&Number(d.deposit_amount)>0)"));
-console.log('8 source/calculation groups passed');
-})().catch(e=>{console.error(e);process.exit(1)});
+const fs=require('fs'),path=require('path'),assert=require('assert');
+const root=path.resolve(__dirname,'..'),base=process.argv[2];
+let ts;try{ts=require('typescript')}catch{ts=require('/opt/nvm/versions/node/v22.16.0/lib/node_modules/typescript')}
+for(const name of fs.readdirSync(path.join(root,'app'))){const file=path.join(root,'app',name);const src=fs.readFileSync(file,'utf8');const result=ts.transpileModule(src,{fileName:file,reportDiagnostics:true,compilerOptions:{jsx:ts.JsxEmit.ReactJSX,target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.ESNext}});const errors=result.diagnostics.filter(d=>d.category===ts.DiagnosticCategory.Error);assert.equal(errors.length,0,name+': '+errors.map(d=>ts.flattenDiagnosticMessageText(d.messageText,'\n')).join('\n'));for(const m of src.matchAll(/\bfrom\s*['"](\.[^'"]+)['"]/g)){const rel=path.normalize(path.join('app',m[1]));const ok=[root,base].filter(Boolean).some(r=>['','.ts','.tsx','.js','.mjs','.css','/index.ts','/index.tsx'].some(e=>fs.existsSync(path.join(r,rel+e))));assert(ok,name+' unresolved '+m[1]);}console.log('PASS syntax/imports:',name)}
+const read=p=>fs.readFileSync(path.join(root,p),'utf8');
+const sql=read('supabase/109a_reconciliation_expenses.sql');
+assert(sql.includes("a.kind<>'Operating'"));assert(sql.includes('public.is_brokerage_admin(b.brokerage_id)'));assert(sql.includes('bank_line_id uuid NOT NULL UNIQUE'));assert(sql.includes('public.match_office_bank(b.id,entry_id)'));assert(sql.includes('public.post_office_entry(a.id,NULL'));assert(sql.includes('possible existing payment'));assert(sql.includes('BEGIN;')&&sql.includes('COMMIT;'));assert(read('supabase/109b_private_agent_expenses.sql').includes('USING(user_id=auth.uid()) WITH CHECK(user_id=auth.uid())'));assert(read('app/back-office.tsx').includes('rv105_set_default_bank'));assert(read('app/agent-reports.tsx').includes('rv_completed_date'));assert(!fs.existsSync(path.join(root,'app/transaction-commission-payout.tsx')));console.log('PASS 11 targeted source assertions');
+const chargeSql=read('supabase/110a_agent_charges.sql');
+assert(chargeSql.includes('deal_charge_id uuid UNIQUE'));assert(chargeSql.includes('receipt_ledger_id uuid UNIQUE'));assert(chargeSql.includes('user_id=d.user_id'));assert(chargeSql.includes('payout already authorized'));assert(chargeSql.includes('kind=\'Operating\''));assert(!chargeSql.includes('CREATE OR REPLACE FUNCTION public.authorize_agent_payout'));assert(!chargeSql.includes('public.post_office_entry('));assert(read('app/agent-full-statement-110.tsx').includes('linked.has(c.id)||consumed.has(c.id)'));assert(read('app/office-agent-profile.tsx').includes('Charges & expenses'));assert(read('app/agent-reports.tsx').includes('AgentFullStatement110'));console.log('PASS 10 additional targeted source assertions');

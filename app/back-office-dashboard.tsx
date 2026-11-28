@@ -11,7 +11,7 @@ import SmartInbox037,{type InboxTab,type InboxItem} from './SmartInbox037';
 import styles from './SmartInbox037.module.css';
 
 
-type Module={name:string;description:string;icon:LucideIcon;badge?:number};
+type Module={name:string;description:string;icon:LucideIcon;badge?:number;route?:string};
 type Group={heading:string;hint:string;modules:Module[]};
 type Props={userId?:string;brokerageName:string;deals:any[];requirements:any[];payouts:any[];bills:any[];accounts:any[];ledger:any[];reconciliations:any[];billingAlerts:any[];onNavigate:(view:string)=>void;onRefresh:()=>void;refreshing:boolean;allocations:any[];matches:any[];closingDeliveries:any[];statements:any[];statementFeatureReady:boolean;workflowEvents:any[]};
 type Notice={id:number;deal_id:string;message:string;created_at:string;read_at:string|null};
@@ -136,24 +136,16 @@ export default function BackOfficeDashboard({userId,brokerageName,deals,requirem
       {name:'Closed Files',description:'Read-only archived sales, uploaded documents and linked listing records.',icon:Archive,badge:closedFiles.length},
     ]},
     {heading:'Agents & Payments',hint:'Manage people, plans, commissions and payouts.',modules:[
-      {name:'Agents & profiles',description:'Agent contact details, licences, production and records.',icon:UserRound},
-      {name:'New agent setup',description:'Onboard agents, agreements and required documents.',icon:UserRoundPlus},
-      {name:'Plans & monthly fees',description:'Commission splits, recurring fees and deductions.',icon:SlidersHorizontal},
-      {name:'Cheque printing',description:'Print authorized cheques and access cheque registers.',icon:Printer},
-      {name:'Agent payments',description:'Authorize payouts and choose cheque or EFT.',icon:WalletCards,badge:unpaid},
-      {name:'Payroll & salaries',description:'Create and approve staff pay runs, then choose cheque or EFT.',icon:UserRound},
-      {name:'EFT payments',description:'Track agent and salary EFTs and confirm bank settlement.',icon:CreditCard},
+      {name:'Agent Management',route:'Agents & profiles',description:'Profiles, onboarding, plans, monthly fees and agreements.',icon:UserRound},
+      {name:'Agent Commissions',route:'Agent payments',description:'Authorize payouts and review commission statements.',icon:WalletCards,badge:unpaid},
+      {name:'Payroll & Salaries',route:'Payroll & salaries',description:'Staff pay runs, salary approvals and payment methods.',icon:UserRound},
+      {name:'Payment Centre',route:'Cheque printing',description:'Cheque printing and EFT registers; existing payment controls.',icon:CreditCard},
     ]},
-    {heading:'Trust & Accounting',hint:'Track brokerage money, banking and financial controls.',modules:[
-      {name:'Trust & bank',description:'Deposits, releases, accounts and ledger entries.',icon:Landmark,badge:pendingDeposits.length},
-      {name:'Bank reconciliation',description:'Monthly PDF/CSV statements, manual lines, trust checks and broker approval.',icon:Scale,badge:pendingRecs.length},
-      {name:'Reports',description:'Production, commissions and brokerage financial reports.',icon:ChartNoAxesCombined},
-      {name:'Audit & controls',description:'Audit history, exceptions and accounting safeguards.',icon:ShieldCheck,badge:billingAlerts.length},
-    ]},
-    {heading:'Accounting, Reporting & Compliance',hint:'Dedicated financial oversight and regulatory review, alongside your existing trust and accounting tools.',modules:[
-      {name:'Accounting',description:'Trust balances, commission receivables, bank checks and authorized payouts.',icon:Landmark,badge:insights.unreconciled.length},
-      {name:'Reporting',description:'Firm sales, production, commissions, GST estimates and CSV exports.',icon:FileSpreadsheet},
-      {name:'Compliance',description:'Required documents, trust exceptions, reconciliation checks and audit history.',icon:ShieldCheck,badge:requirements.filter(r=>!r.verified&&merged.some(d=>d.id===r.deal_id)).length},
+    {heading:'Accounting, Reporting & Compliance',hint:'One home for bookkeeping and financial oversight.',modules:[
+      {name:'Accounting & Trust',route:'Trust & bank',description:'Bank accounts, ledgers, balances and financial oversight.',icon:Landmark},
+      {name:'Bank Reconciliation',route:'Bank reconciliation',description:'Monthly statements, matching, General expenses and approval.',icon:Scale,badge:pendingRecs.length},
+      {name:'Reports',description:'Production, commissions, recorded expenses and GST summaries.',icon:ChartNoAxesCombined},
+      {name:'Compliance & Audit',route:'Audit & controls',description:'Required documents, exceptions, controls and audit history.',icon:ShieldCheck},
     ]},
     {heading:'Brokerage Administration',hint:'Set up and oversee the brokerage workspace.',modules:[
       {name:'Brokerage Control',description:'Office-wide connections and administration hub.',icon:ClipboardList},
@@ -189,7 +181,7 @@ export default function BackOfficeDashboard({userId,brokerageName,deals,requirem
   <div className="bo-modules-title"><div><p className="bo-kicker">YOUR BACK OFFICE</p><h2>Applications & tools</h2><p>Manage transactions, agents and financial operations.</p></div><span className="bo-count">{totalModules} modules</span></div>
   {groups.map(group=><section className="bo-group" key={group.heading}>
    <div className="bo-group-head"><h3>{group.heading}</h3><p>{group.hint}</p></div>
-   <div className={`bo-module-grid ${group.heading==='Transactions & Review'?'bo-module-grid-four':''}`}>{group.modules.map(m=><button key={m.name} type="button" className="bo-module-card" onClick={()=>['Accounting','Reporting','Compliance'].includes(m.name)?jumpFinance(m.name as 'Accounting'|'Reporting'|'Compliance'):onNavigate(m.name)}>
+   <div className={`bo-module-grid ${group.heading==='Transactions & Review'?'bo-module-grid-four':''}`}>{group.modules.map(m=><button key={m.name} type="button" className="bo-module-card" onClick={()=>['Accounting','Reporting','Compliance'].includes(m.name)?jumpFinance(m.name as 'Accounting'|'Reporting'|'Compliance'):onNavigate(m.route||m.name)}>
     <span className="bo-module-top"><span className="bo-module-icon"><m.icon size={24}/></span>{!!m.badge&&<span className="bo-module-badge">{m.badge} items</span>}</span>
     <strong>{m.name}</strong><span className="bo-module-description">{m.description}</span><span className="bo-module-open">Open module <ArrowUpRight size={16}/></span>
    </button>)}</div>
