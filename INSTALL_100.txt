@@ -1,0 +1,2 @@
+RealVolt Fix 100 - Disable transaction form autocomplete
+Based on Fix 099. Replace app/transactions.tsx only after installing Fix 099. No SQL or Edge Function changes. Requests browser autocomplete off for transaction entry and search. Browsers or extensions may ignore autocomplete off; delete existing browser suggestions separately. No data deletion.
