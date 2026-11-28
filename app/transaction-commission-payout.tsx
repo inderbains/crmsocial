@@ -5,127 +5,105 @@ import {brokerageDay} from '../lib/listing-status';
 import {cad,cents} from '../lib/agent-reports';
 import DealAdmin from './deal-admin';
 import OfficeCheques from './office-cheques';
+import ExternalCommissionPayout from './external-commission-payout';
 
-type Deal={id:string;brokerage_id:string|null;rv_funds_verified:boolean;rv_stage:string|null;review_status:string;rv_completion_letter:string|null;address:string;representation:'listing'|'selling';listing_commission:number;selling_commission:number;gst_rate:number;deposit_amount?:number;rv_completed_date?:string|null;rv105_receipt_ledger_id?:string|null;rv106_trust_transfer_id?:string|null;rv106_general_transfer_id?:string|null;deposit_holder?:'our_brokerage'|'other_brokerage'};
+type Deal={id:string;brokerage_id:string|null;rv_stage:string|null;review_status:string;rv_funds_verified:boolean;rv_completion_letter:string|null;rv_completed_date:string|null;address:string;representation:'listing'|'selling';listing_commission:number;selling_commission:number;gst_rate:number;deposit_amount?:number;deposit_holder?:'our_brokerage'|'other_brokerage';buyer_lawyer?:{name?:string;firm?:string}|null;seller_lawyer?:{name?:string;firm?:string}|null;rv105_receipt_ledger_id?:string|null;rv108_lawyer_release_id?:string|null;rv108_commission_receipt_id?:string|null;rv108_general_credit_id?:string|null;rv106_trust_transfer_id?:string|null;rv106_general_transfer_id?:string|null};
 type Doc={id:string;name:string};
-type Props={deal:Deal;agentName:string;docs:Doc[];notify:(value:string)=>void;onChanged:()=>Promise<void>};
-
-export default function TransactionCommissionPayout({deal,agentName,docs,notify,onChanged}:Props){
+type Props={deal:Deal;agentName:string;docs:Doc[];notify:(value:string)=>void;onChanged:()=>Promise<void>;phase?:'before'|'after'};
+const dollars=(n:unknown)=>cad(cents(Number(n||0)));
+export default function TransactionCommissionPayout(props:Props){
+ if(props.deal.deposit_holder!=='our_brokerage') return props.phase==='before'?null:<ExternalCommissionPayout deal={props.deal} agentName={props.agentName} docs={props.docs} notify={props.notify} onChanged={props.onChanged}/>;
+ return <InternalTrustSettlement key={props.deal.id} {...props}/>;
+}
+function InternalTrustSettlement({deal,agentName,docs,notify,onChanged,phase='after'}:Props){
  const db=getSupabase()!;
- const [payouts,setPayouts]=useState<any[]>([]);
- const [accounts,setAccounts]=useState<any[]>([]);
- const [receiptLedger,setReceiptLedger]=useState<any[]>([]);
- const [commission,setCommission]=useState<any>(null);
- const [receiptReference,setReceiptReference]=useState('');
- const ownGross=cents(Number(deal.representation==='listing'?deal.listing_commission:deal.selling_commission));
- const ownGst=Math.round(ownGross*Number(deal.gst_rate??5)/100);
- const expectedReceipt=(ownGross+ownGst)/100;
- const [receiptAmount,setReceiptAmount]=useState(expectedReceipt>0?expectedReceipt.toFixed(2):'');
- const [receiptAccount,setReceiptAccount]=useState('');
- const [receiptDate,setReceiptDate]=useState(brokerageDay());
- const [month,setMonth]=useState(brokerageDay());
- const [busy,setBusy]=useState(false);
- const [loaded,setLoaded]=useState(false);
- const [error,setError]=useState('');
+ const [rows,setRows]=useState<any[]>([]),[accounts,setAccounts]=useState<any[]>([]),[payout,setPayout]=useState<any>(null),[allocation,setAllocation]=useState<any>(null),[gate,setGate]=useState<any>(null);
+ const [loaded,setLoaded]=useState(false),[busy,setBusy]=useState(false),[error,setError]=useState('');
+ const [side,setSide]=useState('seller'),[day,setDay]=useState(brokerageDay()),[reference,setReference]=useState(''),[authorization,setAuthorization]=useState(''),[confirmed,setConfirmed]=useState(false);
+ const [through,setThrough]=useState(brokerageDay()),[method,setMethod]=useState('EFT'),[payDay,setPayDay]=useState(brokerageDay()),[payRef,setPayRef]=useState(''),[payConfirmed,setPayConfirmed]=useState(false),[generalDay,setGeneralDay]=useState(brokerageDay()),[generalRef,setGeneralRef]=useState(''),[ownFees,setOwnFees]=useState(false),[generalConfirmed,setGeneralConfirmed]=useState(false);
+ const internal=true;
+ const ownGross=cents(Number(deal.representation==='listing'?deal.listing_commission:deal.selling_commission)||0),ownGst=Math.round(ownGross*Number(deal.gst_rate||0)/100),total=ownGross+ownGst,deposit=cents(Number(deal.deposit_amount||0));
  const load=useCallback(async()=>{
-  const [p,a,c,l]=await Promise.all([
-   db.from('agent_payouts').select('*').eq('deal_id',deal.id).order('created_at',{ascending:false}),
-   db.from('office_bank_accounts').select('*').eq('brokerage_id',deal.brokerage_id||''),
-   db.from('agent_commission_allocations').select('*').eq('deal_id',deal.id).maybeSingle(),
-   db.from('office_ledger').select('id,account_id,deal_id,amount,entry_date,reference,description').eq('deal_id',deal.id)
-  ]);
-  const failed=[p,a,c,l].find(r=>r.error);
-  if(failed?.error){setError(failed.error.message);return}
-  setPayouts(p.data||[]);setAccounts(a.data||[]);setCommission(c.data||null);setReceiptLedger(l.data||[]);setError('');setLoaded(true);
-  const operating=(a.data||[]).filter((item:any)=>item.kind==='Operating'&&item.active!==false);
-  const preferred=operating.find((item:any)=>item.rv105_default===true)||(operating.length===1?operating[0]:undefined);
-  setReceiptAccount(previous=>operating.some((item:any)=>item.id===previous)?previous:preferred?.id||'');
+  setLoaded(false);
+  const [l,a,p,c]=await Promise.all([db.from('office_ledger').select('id,account_id,deal_id,amount,entry_date,reference,description,reverses_id').eq('deal_id',deal.id).eq('brokerage_id',deal.brokerage_id||''),db.from('office_bank_accounts').select('*').eq('brokerage_id',deal.brokerage_id||''),db.from('agent_payouts').select('*').eq('deal_id',deal.id).eq('brokerage_id',deal.brokerage_id||'').maybeSingle(),db.from('agent_commission_allocations').select('*').eq('deal_id',deal.id).maybeSingle()]);
+  const failed=[l,a,p,c].find(x=>x.error);if(failed?.error){setError(failed.error.message);return}
+  setRows(l.data||[]);setAccounts(a.data||[]);setPayout(p.data);setAllocation(c.data);setGate(null);
+  if(p.data?.status==='Authorized'){const g=await db.rpc('rv_release_gate_status',{p_payout:p.data.id});if(g.error){setError(g.error.message);return}setGate(g.data)}
+  setError('');setLoaded(true);
  },[db,deal.id,deal.brokerage_id]);
  useEffect(()=>{void load()},[load]);
- async function execute(name:string,args:Record<string,unknown>,message:string){
-  setBusy(true);
-  try{
-   const r=await db.rpc(name,args);if(r.error)throw r.error;
-   await load();await onChanged();notify(message);
-  }catch(e){notify((e as Error).message)}finally{setBusy(false)}
- }
- const latest=payouts[0];
- const externalDeposit=deal.deposit_holder==='other_brokerage';
- const internalDeposit=deal.deposit_holder==='our_brokerage';
- const hasOperatingReceipt=receiptLedger.some(e=>Math.abs(Number(e.amount)-expectedReceipt)<0.01&&Number(e.amount)>0&&accounts.some(a=>a.id===e.account_id&&a.kind==='Operating'));
- const trustEntries=receiptLedger.filter(e=>accounts.some(a=>a.id===e.account_id&&a.kind==='Trust'));
- const trustReceipt=trustEntries.length===1&&Number(trustEntries[0].amount)>0&&cents(Number(trustEntries[0].amount))===cents(Number(deal.deposit_amount||0))?trustEntries[0]:null;
- const trustAccount=accounts.find(a=>a.id===trustReceipt?.account_id&&a.active!==false);
- const generalAccounts=accounts.filter(a=>a.kind==='Operating'&&a.active!==false);
- const defaultGeneral=generalAccounts.find(a=>a.rv105_default===true)||(generalAccounts.length===1?generalAccounts[0]:null);
- const priorGeneral=receiptLedger.some(e=>Number(e.amount)>0&&accounts.some(a=>a.id===e.account_id&&a.kind==='Operating'));
- const recordedTransfer=receiptLedger.find(e=>e.id===deal.rv106_general_transfer_id);
- const eligible=deal.rv_stage==='Completed'&&deal.review_status==='Approved'&&deal.rv_funds_verified&&!!deal.rv_completion_letter&&(!externalDeposit||hasOperatingReceipt);
- const commissionBase=Number(commission?.commission_before_gst||0);
- const actualGst=Number(commission?.commission_gst||0);
- const simulatedGst=Math.round(commissionBase*5)/100;
- return <section className="panel" aria-label="Commission payout on this transaction" style={{marginTop:18}}>
-  <h2>5. Commission & agent payout</h2>
-  <p className="hint">Realtor: {agentName||'Agent profile unavailable'} · {deal.address}</p>
-  <p>Review the commission and deductions here, then authorize and issue payment without leaving the transaction. Payments and cheque releases use the existing Back Office audit and ledger functions.</p>
+ async function run(name:string,args:Record<string,unknown>,message:string){setBusy(true);try{const res=await db.rpc(name,args);if(res.error)throw res.error;await onChanged();await load();notify(message)}catch(e){notify((e as Error).message)}finally{setBusy(false)}}
+ const legacy=!!deal.rv106_trust_transfer_id||!!deal.rv106_general_transfer_id||(deal.rv_funds_verified&&!deal.rv108_commission_receipt_id);
+ const trust=rows.filter(r=>accounts.some(a=>a.id===r.account_id&&a.kind==='Trust'));
+ const receipt=trust.find(r=>r.id===deal.rv105_receipt_ledger_id&&Number(r.amount)>0&&!r.reverses_id&&!trust.some(x=>x.reverses_id===r.id));
+ const source=accounts.find(a=>a.id===receipt?.account_id&&a.active!==false);
+ const activeBanks=(kind:string)=>accounts.filter(a=>a.kind===kind&&a.active!==false);
+ const defaultBank=(kind:string)=>activeBanks(kind).find(a=>a.rv105_default)||(activeBanks(kind).length===1?activeBanks(kind)[0]:null);
+ const general=defaultBank('Operating');
+ const balance=trust.reduce((s,r)=>s+cents(Number(r.amount)),0),release=trust.find(r=>r.id===deal.rv108_lawyer_release_id&&!r.reverses_id&&!trust.some(x=>x.reverses_id===r.id)),lawyer=side==='seller'?deal.seller_lawyer:deal.buyer_lawyer;
+ const excess=deposit-total,net=payout?cents(Number(payout.net)):0,share=total-net;
+ const generalCredit=rows.find(r=>r.id===deal.rv108_general_credit_id&&!r.reverses_id&&!rows.some(x=>x.reverses_id===r.id));
+ const simpleReceipt=!!receipt&&!!source&&cents(Number(receipt.amount))===deposit&&rows.length===1&&balance===deposit;
+ const retained=!!receipt&&!!source&&balance===total&&(excess===0&&rows.length===1||excess>0&&!!release&&rows.length===2);
+ const completed=deal.rv_stage==='Completed'&&!!deal.rv_completed_date&&!!deal.rv_completion_letter&&deal.review_status==='Approved';
+ const validDate=(value:string,min?:string|null)=>!!value&&value<=brokerageDay()&&(!min||value>=min);
+ const ready=loaded&&!busy&&!error&&!legacy&&total>0;
+ if(phase==='before'&&!internal)return null;
+ return <section className="panel" style={{marginTop:18}} aria-label={phase==='before'?'Before completion lawyer balance':'Commission settlement'}>
+  <h2>{phase==='before'?'Trust deposit — balance to lawyer':'5. Commission & agent payout'}</h2>
+  <p className="hint">Realtor: {agentName} · {deal.address}</p>
   {error&&<p role="alert" className="notice">{error}</p>}
-  {externalDeposit&&(!deal.rv_funds_verified||!hasOperatingReceipt)&&<div className="notice" role="region" aria-label="Record commission bank receipt">
-   <b>{deal.rv_funds_verified?'Finish linking verified commission to the general bank ledger':'1. Confirm commission received and post to general bank ledger'}</b>
-   <p>{deal.rv_funds_verified?'This transaction was previously marked received, but no matching general-account receipt was posted. Confirm the actual bank receipt below once; RealVolt will link it without marking the receipt twice.':'Enter the actual bank receipt once. RealVolt records the general-account deposit and marks commission received together in one database transaction.'}</p>
-   <p>Expected brokerage commission: <b>{cad(cents(Number(deal.representation==='listing'?deal.listing_commission:deal.selling_commission)))}</b> + GST <b>{cad(cents(expectedReceipt-Number(deal.representation==='listing'?deal.listing_commission:deal.selling_commission)))}</b> = <b>{cad(cents(expectedReceipt))}</b>.</p>
-   <div className="crm-form-grid">
-    <label>Receiving general bank account<select required value={receiptAccount} onChange={e=>setReceiptAccount(e.target.value)}><option value="">Select general account</option>{accounts.filter(a=>a.kind==='Operating'&&a.active!==false).map(a=><option key={a.id} value={a.id}>{a.name}</option>)}</select></label>
-    <label>Actual amount received (CAD)<input type="number" step=".01" min="0.01" required value={receiptAmount} onChange={e=>setReceiptAmount(e.target.value)}/></label>
-    <label>Actual bank deposit date<input type="date" required value={receiptDate} max={brokerageDay()} onChange={e=>setReceiptDate(e.target.value)}/></label>
-    <label>Cheque/EFT bank reference<input value={receiptReference} onChange={e=>setReceiptReference(e.target.value)} required placeholder="Actual bank transaction reference"/></label>
-   </div>
-   <button type="button" className="btn primary" disabled={busy||!!error||!receiptAccount||expectedReceipt<=0||Math.abs(Number(receiptAmount)-expectedReceipt)>0.009||receiptReference.trim().length<4||!receiptDate} onClick={()=>{if(confirm(`Confirm ${cad(cents(Number(receiptAmount)))} was ACTUALLY deposited into the selected general account? RealVolt will post ONE receipt to accounting (or link an exact existing one). This will not transfer or reconcile money at the bank.`))void execute('rv072_receive_commission_funds',{p_deal:deal.id,p_account:receiptAccount,p_amount:Number(receiptAmount),p_day:receiptDate,p_reference:receiptReference.trim()},'Commission receipt recorded/linked to general-account ledger. Match it in Bank Reconciliation.')}}>{busy?'Recording…':deal.rv_funds_verified?'Link verified receipt to accounting':'Confirm receipt & automatically post to accounting'}</button>
-   {Math.abs(Number(receiptAmount)-expectedReceipt)>0.009&&<p className="hint">The deposit must match the expected {cad(cents(expectedReceipt))} for this represented side. Review commission and GST before posting a different amount.</p>}
-   <p className="hint">Do not record a second deposit if the money already appears in the general ledger. The server checks for duplicates. Posting a RealVolt ledger entry does not initiate a bank transfer or confirm bank-statement reconciliation.</p>
-  </div>}
-  {internalDeposit&&!deal.rv_funds_verified&&<div className="notice" role="region" aria-label="Trust to General commission transfer">
-   <b>1. Record Trust-to-General commission transfer</b>
-   <p>No separate client deposit confirmation is needed. The recorded deposit is used automatically. Confirm this action only after cleared funds and an authorized transfer have actually moved at the bank.</p>
-   <div className="crm-form-grid">
-    <div>Trust receipt recorded: <b>{trustReceipt?cad(cents(Number(trustReceipt.amount))):'Awaiting eligible ledger receipt'}</b></div>
-    <div>From: <b>{trustAccount?.name||'Trust account unavailable'}</b></div>
-    <div>Our commission: <b>{cad(ownGross)}</b> + GST <b>{cad(ownGst)}</b></div>
-    <div>To: <b>{defaultGeneral?.name||'Set default General account'}</b></div>
-    <div>Transfer to General: <b>{cad(cents(expectedReceipt))}</b></div>
-    <div>Trust remaining after this transfer: <b>{trustReceipt?cad(cents(Number(trustReceipt.amount))-cents(expectedReceipt)):'—'}</b></div>
-    <label>Actual transfer date<input type="date" min={deal.rv_completed_date||undefined} max={brokerageDay()} value={receiptDate} onChange={e=>setReceiptDate(e.target.value)}/></label>
-    <label>Actual bank transfer reference<input value={receiptReference} onChange={e=>setReceiptReference(e.target.value)} placeholder="Bank transfer reference" maxLength={200}/></label>
-   </div>
-   {loaded&&(!trustReceipt||!trustAccount||!defaultGeneral||priorGeneral||expectedReceipt>Number(trustReceipt?.amount||0))&&<p role="alert">{!trustReceipt?'No single full receipt available, or prior Trust releases exist. Check the transaction ledger.':!trustAccount?'The original Trust account is unavailable.':!defaultGeneral?'Configure the default General account under Trust & Bank.':priorGeneral?'A General receipt already exists. Review it; do not duplicate it.':'The deposit does not cover the full commission. Review the shortfall in accounting.'}</p>}
-   <button type="button" className="btn primary" disabled={busy||!loaded||!!error||!trustReceipt||!trustAccount||!defaultGeneral||priorGeneral||expectedReceipt<=0||expectedReceipt>Number(trustReceipt?.amount||0)||!receiptDate||receiptDate>brokerageDay()||!deal.rv_completed_date||receiptDate<deal.rv_completed_date||receiptReference.trim().length<4||deal.review_status!=='Approved'||deal.rv_stage!=='Completed'||!deal.rv_completion_letter} onClick={()=>{if(confirm(`Has the authorized ${cad(cents(expectedReceipt))} actually moved from Trust to General? RealVolt will post both ledger entries together, not move money at the bank.`))void execute('rv106_record_commission_transfer',{p_deal:deal.id,p_day:receiptDate,p_reference:receiptReference.trim()},'Commission transfer recorded in Trust and General. Review the agent payout next.')}}>{busy?'Recording…':'Record transfer & update both accounts'}</button>
-   <p className="hint">Remaining Trust funds are not automatically released. Record separately authorized lawyer and cooperating brokerage disbursements when they actually occur. Bank-statement reconciliation remains separate.</p>
-  </div>}
-  {internalDeposit&&deal.rv_funds_verified&&<p className="notice">{recordedTransfer?`Commission transfer recorded in both ledgers: ${cad(cents(Number(recordedTransfer.amount)))} · ${recordedTransfer.reference}.`:'Commission previously marked received. Review the existing Trust and General ledger entries before paying the agent; no transfer will be posted again.'}</p>}
-  {!externalDeposit&&!internalDeposit&&<p className="notice" role="alert">Deposit holder is missing. Save whether our brokerage or another brokerage holds the deposit before verifying commission funds.</p>}
-  {deal.rv_funds_verified&&externalDeposit&&hasOperatingReceipt&&<p className="notice">Commission receipt verified and general-account deposit linked to this transaction. The bank-statement reconciliation is a separate matching step.</p>}
-  <div style={{marginTop:16}}>
-   <DealAdmin kind="Sale" agentName={agentName} dealId={deal.id} status={deal.review_status} backOffice={true} docs={docs} canAllocate={!!deal.rv_funds_verified} defaultCommission={Number(deal.representation==='listing'?deal.listing_commission:deal.selling_commission)} defaultGST={0} notify={notify} commissionOnly onFinancialChanged={()=>void load()}/>
+  {!loaded&&!error&&<p>Loading recorded accounting entries…</p>}
+  {legacy&&<p role="alert" className="notice">This file has a legacy commission transfer or receipt. Do not post a second receipt or payout. Review the existing bank and Trust entries with Back Office before continuing.</p>}
+  <div className="crm-form-grid">
+   {internal&&<div>Original client deposit: <b>{dollars(deposit/100)}</b></div>}
+   <div>Our commission: <b>{cad(ownGross)}</b> + GST <b>{cad(ownGst)}</b></div>
+   <div>Commission to retain in Trust: <b>{cad(total)}</b></div>
+   <div>Trust account: <b>{source?.name||'Receipt not linked'}</b></div>
+   <div>Recorded Trust balance for this sale: <b>{loaded?cad(balance):'—'}</b></div>
+   {internal&&<div>Proposed balance payable to lawyer: <b>{cad(Math.max(excess,0))}</b></div>}
   </div>
-  {commissionBase>0&&<div className="notice" style={{margin:'14px 0'}}>
-   <b>GST testing preview — 5%</b>
-   <p>Agent commission: {cad(cents(commissionBase))} · GST test calculation: {cad(cents(simulatedGst))} · Saved agent GST: {cad(cents(actualGst))}.</p>
-   <p className="hint">The 5% figure is a calculation preview only. An actual payout uses recorded GST based on the agent's verified registration. This preview never posts GST to the ledger.</p>
+  {internal&&release&&<p className="notice">Lawyer disbursement recorded: {dollars(-Number(release.amount))} · {release.entry_date} · {release.reference}. Commission remains in Trust until legal completion.</p>}
+  {internal&&!release&&excess===0&&<p className="hint">No excess deposit is available for this standard release.</p>}
+  {internal&&excess<0&&<p role="alert">The deposit does not cover commission. Review the shortfall separately; this standard workflow cannot settle it.</p>}
+  {internal&&!release&&excess>0&&!legacy&&!deal.rv_funds_verified&&<div className="notice" style={{marginTop:12}}>
+   <h3>Record authorized payment to lawyer</h3>
+   <p>Pay only the authorized excess, retaining {cad(total)} in Trust. Obtain written directions from both parties or their conveyancers and the receiving conveyancer’s stakeholder undertaking. If another brokerage or any other payee must be paid separately, use accounting review instead of this one-payment workflow.</p>
+   <div className="crm-form-grid">
+    <label>Receiving lawyer<select value={side} onChange={e=>{setSide(e.target.value);setConfirmed(false)}}><option value="seller">Seller’s lawyer{deal.seller_lawyer?.name?' — '+deal.seller_lawyer.name:''}</option><option value="buyer">Buyer’s lawyer{deal.buyer_lawyer?.name?' — '+deal.buyer_lawyer.name:''}</option></select></label>
+    <label>Actual payment date<input type="date" value={day} min={receipt?.entry_date} max={phase==='after'&&deal.rv_completed_date?deal.rv_completed_date:brokerageDay()} onChange={e=>{setDay(e.target.value);setConfirmed(false)}}/></label>
+    <label>Cheque / EFT bank reference<input value={reference} maxLength={200} onChange={e=>{setReference(e.target.value);setConfirmed(false)}}/></label>
+    <label>Written directions and undertaking reference<input value={authorization} maxLength={500} onChange={e=>{setAuthorization(e.target.value);setConfirmed(false)}}/></label>
+   </div>
+   <label style={{display:'flex',alignItems:'center',gap:8,margin:'12px 0'}}><input type="checkbox" style={{width:'auto'}} checked={confirmed} onChange={e=>setConfirmed(e.target.checked)}/> I confirm cleared funds, written directions and stakeholder undertaking are on file; this lawyer received the exact authorized excess and no separate entitlement is omitted.</label>
+   {loaded&&!simpleReceipt&&<p role="alert">A single full linked deposit receipt is required. Review missing, partial, reversed or prior payments; never enter a duplicate deposit.</p>}
+   <button type="button" className="btn primary" disabled={!ready||!simpleReceipt||!lawyer?.name||!validDate(day,receipt?.entry_date)||(phase==='after'&&(!deal.rv_completed_date||day>deal.rv_completed_date))||reference.trim().length<4||authorization.trim().length<4||!confirmed} onClick={()=>void run('rv108_record_lawyer_release',{p_deal:deal.id,p_side:side,p_day:day,p_reference:reference.trim(),p_authorization:authorization.trim(),p_amount:excess/100},'Lawyer disbursement recorded. Commission remains in Trust.')}>Record lawyer disbursement</button>
   </div>}
-  <div style={{marginTop:16,borderTop:'1px solid #d2dfd3',paddingTop:16}}>
-   <h3>6. Authorize payment</h3>
-   {latest?<p>Agent payout: <b>{latest.status}</b> · Authorized net amount: <b>{cad(cents(latest.net))}</b> (commission {cad(cents(latest.gross))} + GST {cad(cents(latest.gst))} − deductions {cad(cents(latest.deductions))})</p>:<p className="hint">First verify actual funds, calculate agent commission and review all fees, then authorize this payment.</p>}
-   <label>Apply outstanding fees through <input type="date" value={month} onChange={e=>setMonth(e.target.value)}/></label>
-   {!latest&&<div className="actions">
-    <button type="button" className="btn" disabled={busy||!eligible} onClick={()=>void execute('apply_agent_split',{deal:deal.id},'Commission split calculated from agent profile')}>Calculate agent split</button>
-    <button type="button" className="btn primary" disabled={busy||!eligible||!commission} onClick={()=>{if(confirm('Authorize agent payout using the SAVED commission, GST and office deductions?'))void execute('authorize_agent_payout',{deal:deal.id,through_month:month},'Agent payout authorized. Prepare and issue the cheque below.')}}>Authorize payout with deductions</button>
+  {phase==='before'?<p className="hint">No commission transfer or agent payout is permitted through this workflow before legal completion. Recording a disbursement does not move money at the bank.</p>:<>
+   {!legacy&&!deal.rv_funds_verified&&<div className="notice" style={{marginTop:14}}>
+    <h3>Release earned commission for settlement</h3>
+    <p>Uses the existing Trust receipt and retained commission. No new deposit or transfer is created.</p>
+    <button className="btn primary" type="button" disabled={!ready||!completed||!retained} onClick={()=>{if(confirm('Confirm the retained funds are cleared and the commission is earned and authorized for distribution after legal completion?'))void run('rv108_confirm_commission',{p_deal:deal.id,p_day:null,p_reference:'Earned and cleared retained Trust commission'},'Commission available for settlement in Trust.')}}>Authorize retained commission for settlement</button>
    </div>}
-   {!eligible&&<p className="hint">Authorization requires an approved completed sale, lawyer completion letter and confirmed actual commission receipt{externalDeposit?', including a linked general-account ledger receipt':''}.</p>}
-   {latest?.status==='Paid'&&<p className="notice">Agent payment has been recorded. The cheque/ledger entry can now be matched against the bank statement under Bank Reconciliation.</p>}
-  </div>
-  {!!latest&&<details open={latest.status==='Authorized'} style={{marginTop:18,borderTop:'1px solid #d2dfd3',paddingTop:16}}>
-   <summary style={{cursor:'pointer',fontWeight:700,fontSize:18}}>7. Prepare / issue commission cheque</summary>
-   <OfficeCheques brokerage={{id:deal.brokerage_id}} accounts={accounts.filter(a=>a.kind==='Operating')} deals={[deal]} payouts={payouts} notify={notify} onChanged={load} initialDealId={deal.id} onIssued={()=>{void load();void onChanged()}}/>
-   <p className="hint">Preparing or downloading a cheque is not payment. Record Issue only after signing and releasing it. The server checks the required document release approval.</p>
-  </details>}
+   {!legacy&&deal.rv_funds_verified&&!!receipt&&<>
+    <p className="notice">Commission is held in Trust. The agent’s authorized net payment is paid from Trust; only the remaining earned brokerage share goes to General.</p>
+    <DealAdmin kind="Sale" agentName={agentName} dealId={deal.id} status={deal.review_status} backOffice={true} docs={docs} canAllocate={!payout} defaultCommission={ownGross/100} defaultGST={0} notify={notify} commissionOnly onFinancialChanged={()=>void load()}/>
+    {!payout&&<><h3>6. Calculate and authorize agent payout</h3><label>Apply outstanding fees through <input type="date" value={through} onChange={e=>setThrough(e.target.value)}/></label><div className="actions"><button type="button" className="btn" disabled={!ready||!completed||balance!==total} onClick={()=>void run('apply_agent_split',{deal:deal.id},'Agent split calculated')}>Calculate agent split</button><button type="button" className="btn primary" disabled={!ready||!completed||!allocation||balance!==total} onClick={()=>{if(confirm('Authorize the calculated net payout and saved deductions?'))void run('authorize_agent_payout',{deal:deal.id,through_month:through},'Agent payout authorized. Review documents before release.')}}>Authorize payout</button></div></>}
+    {payout&&<div style={{marginTop:16}}><h3>6. Agent payment — {payout.status}</h3><p>Commission {dollars(payout.gross)} + GST {dollars(payout.gst)} − deductions {dollars(payout.deductions)} = <b>{cad(net)}</b></p>
+     {payout.status==='Authorized'&&<>
+      <p>Compliance review: {gate?.verified??0} / {gate?.required??0} required documents verified · {gate?.approved?'Release approved':'Release approval required'}</p>
+      {!gate?.approved&&<button type="button" className="btn" disabled={!ready||!gate?.ready_for_review} onClick={()=>{if(confirm('Approve release after reviewing the required documents?'))void run('rv_approve_commission_release',{p_payout:payout.id},'Commission release approved.')}}>Approve commission release</button>}
+      <details style={{marginTop:12}}><summary>Print and issue Trust commission cheque</summary><OfficeCheques brokerage={{id:deal.brokerage_id}} accounts={source?[source]:[]} deals={[deal]} payouts={[payout]} notify={notify} onChanged={async()=>{await load();await onChanged()}} initialDealId={deal.id} commissionTrust={true}/></details>
+      <div className="crm-form-grid" style={{marginTop:12}}><label>Externally paid by<select value={method} onChange={e=>{setMethod(e.target.value);setPayConfirmed(false)}}><option>EFT</option><option>Cheque</option></select></label><label>Actual payment date<input type="date" value={payDay} onChange={e=>{setPayDay(e.target.value);setPayConfirmed(false)}}/></label><label>Actual bank/cheque reference<input value={payRef} maxLength={180} onChange={e=>{setPayRef(e.target.value);setPayConfirmed(false)}}/></label></div>
+      <label style={{display:'flex',gap:8,alignItems:'center',margin:'12px 0'}}><input type="checkbox" style={{width:'auto'}} checked={payConfirmed} onChange={e=>setPayConfirmed(e.target.checked)}/> Actual payment from Trust made; no other active cheque or EFT instruction exists.</label>
+      <button type="button" className="btn primary" disabled={!ready||!gate?.approved||!payConfirmed||!validDate(payDay,deal.rv_completed_date)||!payRef.trim()||net<=0||net>total||balance!==total} onClick={()=>void run('rv108_record_agent_payment',{p_payout:payout.id,p_day:payDay,p_reference:payRef.trim(),p_method:method},'Agent payment recorded from Trust.')}>Record external agent payment</button>
+     </>}
+     {payout.status==='Paid'&&<div className="notice" style={{marginTop:14}}><h3>7. Brokerage earned share to General</h3><p>Agent net paid: <b>{cad(net)}</b> · Remaining brokerage amount (including authorized own fees): <b>{cad(share)}</b></p>
+      {generalCredit?<p>Recorded transfer: {dollars(generalCredit.amount)} · {generalCredit.entry_date} · {generalCredit.reference}</p>:share===0&&balance===0?<p>No brokerage transfer required.</p>:<><p>From {source?.name} to {general?.name||'Set default General account'}. Record only the amount actually transferred at the bank.</p><div className="crm-form-grid"><label>Actual transfer date<input type="date" value={generalDay} onChange={e=>{setGeneralDay(e.target.value);setGeneralConfirmed(false)}}/></label><label>Bank transfer reference<input value={generalRef} maxLength={200} onChange={e=>{setGeneralRef(e.target.value);setGeneralConfirmed(false)}}/></label></div>{Number(payout.deductions)>0&&<label><input type="checkbox" style={{width:'auto'}} checked={ownFees} onChange={e=>setOwnFees(e.target.checked)}/> All deductions are authorized brokerage-owned fees; no third-party remittances.</label>}<label style={{display:'flex',gap:8,alignItems:'center',margin:'12px 0'}}><input type="checkbox" style={{width:'auto'}} checked={generalConfirmed} onChange={e=>setGeneralConfirmed(e.target.checked)}/> Actual authorized transfer completed at bank.</label><button className="btn primary" type="button" disabled={!ready||!general||!generalConfirmed||(Number(payout.deductions)>0&&!ownFees)||!validDate(generalDay,payout.paid_date)||generalRef.trim().length<4||share<=0||balance!==share} onClick={()=>void run('rv108_record_brokerage_share',{p_deal:deal.id,p_day:generalDay,p_reference:generalRef.trim(),p_own_fees_confirmed:ownFees},'Brokerage share posted to General and debited from Trust.')}>Record brokerage transfer</button></>}
+      {balance===0&&<p>Trust balance for this transaction is zero. Other transaction balances remain unchanged.</p>}</div>}
+    </div>}
+   </>}
+  </>}
+  <p className="hint">RealVolt records ledger entries only. Actual bank movement and bank reconciliation are separate.</p>
  </section>;
 }

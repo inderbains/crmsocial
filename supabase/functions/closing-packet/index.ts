@@ -1,6 +1,6 @@
 import {createClient} from 'npm:@supabase/supabase-js@2.89.0';
 import nodemailer from 'npm:nodemailer@^9';
-import {packetTexts} from '../_shared/calculations.mjs';
+import {packetTexts,calculateClosing} from '../_shared/calculations.mjs';
 import {textPDF} from '../_shared/pdf.mjs';
 const cors={'Access-Control-Allow-Origin':'*','Access-Control-Allow-Headers':'authorization, x-client-info, apikey, content-type','Access-Control-Allow-Methods':'POST, OPTIONS'};
 const reply=(value:unknown,status=200)=>new Response(JSON.stringify(value),{status,headers:{...cors,'Content-Type':'application/json'}});
@@ -46,6 +46,23 @@ Deno.serve(async(req:Request)=>{
  const extra=String(body.instructions||'').trim();if(extra.length>8000)return reply({error:'Instructions are too long'},400);
  const template=await db.from('office_document_templates').select('*').eq('brokerage_id',d.brokerage_id).maybeSingle();if(template.error)throw template.error;const texts=packetTexts(d,{...b.data,...template.data},body.side,extra),recipient=d[body.side+'_lawyer'];
  const attachments=[];for(const [name,text] of Object.entries(texts))attachments.push({filename:name==='cir'?'Commission_Instruction_Report.pdf':'Letter_to_Complete.pdf',content:base64(await textPDF(text as string))});
+ // Generate a transaction-specific receipt from the actual posted ledger, not a contractual amount or raw cheque image.
+ let trustReceiptIncluded=false;
+ if(d.deposit_holder==='our_brokerage'&&Number(d.deposit_amount)>0){
+  if(!d.rv105_receipt_ledger_id)return reply({error:'Record and link the actual Trust receipt for this sale before preparing the lawyer package.'},409);
+  const lr=await db.from('office_ledger').select('id,account_id,amount,entry_date,reverses_id').eq('id',d.rv105_receipt_ledger_id).eq('deal_id',d.id).eq('brokerage_id',d.brokerage_id).single();
+  if(lr.error||!lr.data||lr.data.reverses_id||Number(lr.data.amount)!==Number(d.deposit_amount)||Number(lr.data.amount)<=0)return reply({error:'The recorded Trust receipt is unavailable or does not match the saved deposit. Review accounting before sending.'},409);
+  const reversal=await db.from('office_ledger').select('id').eq('reverses_id',lr.data.id).limit(1);if(reversal.error)throw reversal.error;if(reversal.data.length)return reply({error:'The Trust receipt was reversed. Review accounting before sending.'},409);
+  const bank=await db.from('office_bank_accounts').select('id').eq('id',lr.data.account_id).eq('brokerage_id',d.brokerage_id).eq('kind','Trust').single();if(bank.error)return reply({error:'The receipt is not linked to a Trust account in this brokerage.'},409);
+  const cad=(n:unknown)=>new Intl.NumberFormat('en-CA',{style:'currency',currency:'CAD'}).format(Number(n));
+  const c=calculateClosing(d);
+  const release=d.rv108_lawyer_release_id?await db.from('office_ledger').select('amount,entry_date,reverses_id').eq('id',d.rv108_lawyer_release_id).eq('deal_id',d.id).eq('brokerage_id',d.brokerage_id).eq('account_id',lr.data.account_id).single():null;
+  if(release?.error)throw release.error;
+  if(release?.data){const rev=await db.from('office_ledger').select('id').eq('reverses_id',d.rv108_lawyer_release_id).limit(1);if(rev.error)throw rev.error;if(rev.data.length||release.data.reverses_id||Number(release.data.amount)!==-c.remittance/100)return reply({error:'Recorded lawyer disbursement differs from current proposed instructions. Review the ledger before sending.'},409);}
+  const receiptText=['REALVOLT | BROKERAGE TRUST DEPOSIT RECEIPT','',`Brokerage: ${b.data.name}`,`Property: ${d.address}`,`Transaction reference: ${d.id}`,`Receipt reference: ${lr.data.id}`,`Date received (recorded): ${lr.data.entry_date}`,`Client deposit received: ${cad(lr.data.amount)}`,'Account type: Brokerage Trust',`Proposed commission retained pending legal completion: ${cad(c.deducted/100)}`,`Proposed balance payable to lawyer: ${cad(c.remittance/100)}`,release?.data?`Recorded lawyer disbursement: ${cad(-Number(release.data.amount))} on ${release.data.entry_date}`:'No lawyer disbursement is certified by this receipt.', '', 'This receipt reflects the brokerage’s recorded client deposit. It is not a bank-issued confirmation of clearance, reconciliation or current availability of funds.','No private bank account or cheque details are included.'].join('\n');
+  attachments.push({filename:'Trust_Deposit_Receipt.pdf',content:base64(await textPDF(receiptText,`${lr.data.entry_date}T00:00:00Z`))});trustReceiptIncluded=true;
+ }
+ const generatedCount=attachments.length;
  const ids=Array.isArray(body.document_ids)?[...new Set(body.document_ids.map(String))].sort():[];if(ids.length>20)return reply({error:'Select up to 20 additional files'},400);
  let total=0;
  for(const id of ids){const doc=await db.from('deal_documents').select('*').eq('id',id).eq('deal_id',d.id).single();if(doc.error)return reply({error:'An attachment is not part of this transaction'},400);const verified=await db.from('deal_requirements').select('label,verified').eq('deal_id',d.id).eq('document_id',id);if(verified.error||!verified.data?.some(r=>r.verified&&safeLabel(r.label))||verified.data.some(r=>!safeLabel(r.label)))return reply({error:'Select only verified conveyancing categories; private IDs and internal records cannot be emailed'},400);if(forbiddenFile.test(doc.data.name))return reply({error:'Internal or identity documents cannot be attached to conveyancing emails'},400);const file=await db.storage.from('transaction-files').download(doc.data.path);if(file.error)throw file.error;total+=file.data.size;if(total>10*1024*1024)return reply({error:'Email attachments must total 10 MB or less'},400);attachments.push({filename:doc.data.name,content:base64(new Uint8Array(await file.data.arrayBuffer()))})}
@@ -54,9 +71,9 @@ Deno.serve(async(req:Request)=>{
  const gmailPassword=(Deno.env.get('GMAIL_APP_PASSWORD')||'').replace(/\s+/g,'');
  const mailbox=(v:unknown)=>typeof v==='string'&&/^[^\s@,;<>]+@[^\s@,;<>]+\.[^\s@,;<>]+$/.test(v);
  if(!mailbox(recipient.email))return reply({error:'The saved lawyer email must contain one valid email address'},400);
- const payload={from:provider==='gmail'?gmailUser:(Deno.env.get('CLOSING_FROM_EMAIL')||''),reply_to:b.data.email,to:[recipient.email],subject:`${d.address} — CIR and completion instructions`,text:`Dear ${recipient.name},\n\nPlease find the Commission Instruction Report, letter to complete and selected transaction documents attached.\n\n${b.data.name}`,attachments};
+ const payload={from:provider==='gmail'?gmailUser:(Deno.env.get('CLOSING_FROM_EMAIL')||''),reply_to:b.data.email,to:[recipient.email],subject:`${d.address} — CIR and completion instructions`,text:`Dear ${recipient.name},\n\nPlease find the Commission Instruction Report, letter to complete and selected transaction documents attached.${trustReceiptIncluded?' The recorded Trust Deposit Receipt is also attached.':''}\n\n${b.data.name}`,attachments};
  const canonical=JSON.stringify(payload),hash=Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(canonical)))).map(n=>n.toString(16).padStart(2,'0')).join('');
- if(body.action==='preview')return reply({recipient:{name:recipient.name,email:recipient.email,side:body.side},attachments:attachments.slice(0,2),cir:texts.cir,letter:texts.letter,preview_hash:hash,additional_files:ids.length,subject:payload.subject,sender:payload.from,reply_to:payload.reply_to||'',text:payload.text,attachment_names:attachments.map(a=>a.filename)});
+ if(body.action==='preview')return reply({recipient:{name:recipient.name,email:recipient.email,side:body.side},attachments:attachments.slice(0,generatedCount),cir:texts.cir,letter:texts.letter,preview_hash:hash,additional_files:ids.length,subject:payload.subject,sender:payload.from,reply_to:payload.reply_to||'',text:payload.text,attachment_names:attachments.map(a=>a.filename)});
  if(body.preview_hash!==hash)return reply({error:'The file or recipients changed. Preview the documents again before sending.'},409);
  const apiKey=Deno.env.get('RESEND_API_KEY');if(!['gmail','resend'].includes(provider)||(provider==='gmail'?(!gmailUser||!gmailPassword):!apiKey)||!payload.from||!mailbox(b.data.email)||(provider==='gmail'&&!mailbox(gmailUser)))return reply({error:'Configure the email sender and brokerage reply-to email before sending'},503);
  const requestKey=`closing/${d.id}/${body.side}/${hash}`;

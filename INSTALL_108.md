@@ -1,0 +1,26 @@
+# RealVolt Fix 108 — Internal Trust settlement only
+
+**Test/staging package. Not approved for live trust accounting.** Have the managing broker and accountant verify legal release instructions, commission allocations, taxes, deductions, ledger accuracy and bank reconciliation before production. Do not use on live funds until the complete test matrix passes.
+
+## Scope
+- Existing new listing, accepted offer, direct sold and subjects-removed document workflows are retained (transaction screen based on Fix 107).
+- Only approved SALES with `deposit_holder = 'our_brokerage'` enter the new pre-completion lawyer-release and retained-commission workflow. The existing external-deposit UI is kept as a separate component, byte-for-byte from Fix 106; the existing external commission receipt RPC and gate are not replaced. The shared payout function delegates the other-brokerage case to the previously installed implementation, with a brokerage-admin scope check. External commission payment from General is legacy test behavior, not a compliance endorsement; review that route separately before launch. BCFSA's current remuneration guidance generally requires commission payments to licensees from Trust or Commission Trust.
+- No historic ledger entries are rewritten. Existing internal files that already transferred full commission to General, partial receipts, reversed entries, shortfalls, separate cooperating-brokerage entitlements, multiple payouts, zero net payouts and third-party deductions require separate accounting review. No bank transfer is initiated.
+
+## Install (staging)
+Prerequisites: prior installed accounting, reviewer, cheque/EFT and compliance SQL, especially Fixes 073, 095, 097, 099, 105, 106 and 107 UI. Verify current source matches the uploaded repository and previous fixes. Take a backup of staging, stop financial activity during migrations, run SQL in Supabase SQL Editor in order. Each file is a transaction; copy the whole file. Stop on any error; do not proceed to UI deploy until every file succeeds.
+
+1. Run `supabase/108a_lawyer_release.sql`, `108b_record_lawyer_release.sql`, `108c_confirm_earned_commission.sql`, `108d_trust_payout.sql`, `108e_brokerage_share.sql`, `108f_trust_close_guard.sql`, `108g_trust_cheque.sql` in sequence. Run `VERIFY_108_READ_ONLY.sql`: all nine flags should be true. These checks do not establish accounting correctness.
+2. Upload all five files from `app/` into the existing GitHub **app/** directory, not repository root. Preserve unrelated files. `external-commission-payout.tsx` is new. `transactions.tsx` retains Fix 107. `office-cheques.tsx` adds a transaction-specific Trust cheque option. No change to Stripe or Gmail secrets.
+3. Update the `closing-packet` Edge Function and its included `_shared/calculations.mjs`, `_shared/pdf.mjs` and `closing-packet/deno.json`. Use CLI deployment from the existing project checkout so the shared modules are available. Do not overwrite unrelated shared files or deploy with an unverified project link. Redeploy Hostinger and test build.
+
+## Test matrix
+- New listing: create and approve, no Trust release panel. Accepted offer: no premature approval or release. Direct Sold: upload all documents, commission and lawyer info, submit. Existing document history preserved.
+- External-deposit sale: no client deposit to our Trust; no new receipt attachment or lawyer release. Original external receipt and payout UI operates as before. Test legacy cheque/EFT, commission statement and close.
+- Own-deposit sale: full linked $100,000 Trust receipt, own commission $19,890 and GST $994.50. Preview email contains Trust_Deposit_Receipt.pdf plus CIR and letter. No identity documents or raw cheque details sent. Email log remains in compliance. With documented authorization and stakeholder undertaking, record actual $79,115.50 lawyer disbursement before legal completion. Trust ledger for sale = $20,884.50. No General credit yet. Check another transaction remains unaffected.
+- Before completion: commission settlement blocked. After legal completion and lawyer letter, authorize earned funds; no duplicate deposit. Calculate/authorize payout, verify compliance, record actual cheque/EFT from original Trust. Transfer earned brokerage share and authorized brokerage-owned deductions to General after payment. Check Trust balance for sale = zero. Auto statement and close.
+- Retry each action, cross-brokerage attempt, agent attempt, reversed receipt, prior manual ledger movements, locked periods, invalid payment date, partial deposit, pending cheque/EFT, unauthorized document. Verify no unintended writes. Reconcile bank independently. Current patch supports only standard single-receipt, single-lawyer-release files with all separate entitlements accounted for; other scenarios require review.
+
+References: https://www.bcfsa.ca/industry-resources/real-estate-professional-resources/knowledge-base/guidelines/trust-accounts-guidelines and https://www.bcfsa.ca/industry-resources/real-estate-professional-resources/knowledge-base/guidelines/remuneration-guidelines
+
+Validation: source syntax and local calculation/scope checks only. No live SQL, full TypeScript typecheck/build, bank or email testing.
