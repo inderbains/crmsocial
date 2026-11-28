@@ -1,7 +1,9 @@
-Fix 106 — Integrated Trust-to-General commission transfer. Requires installed Fix 105 and prior accounting migrations. Staging first.
-1. Run 106a_transfer_guard.sql then 106b_record_commission_transfer.sql in separate SQL Editor queries, copying each entire file. Stop on errors.
-2. Replace app/transaction-commission-payout.tsx inside the existing app folder in GitHub. Redeploy.
-3. Open an approved legally completed sale with actual deposit already recorded in Trust. Verify calculated own-side commission plus GST, original Trust account and default General account. Record actual authorized transfer date and bank reference only once the bank movement has occurred. Both ledger entries and the verified flag are committed together.
-4. Review the calculated agent split and deductions, then authorize and record payout.
-This update supports a single full trust receipt on the sale with no earlier releases or General receipts, sufficient funds for full own-side commission and an unambiguous General account. Historical manual postings, prior releases, shortfalls, partial receipts, reversals, and separate lawyer/cooperating brokerage disbursements require accounting review. Does not initiate bank transfers or release client funds. Existing verified historical records remain unchanged.
-Validation: TS transpile syntax and relative imports checked, static SQL source assertions only. No full production build or live database execution. Test exact retry, insufficient trust, locked period, wrong brokerage/reviewer, old verification action blocked, and atomic rollback when General entry fails.
+RealVolt Fix 107 — Direct Sold complete document upload
+Requires Fix 105 (and retain Fix 106 commission payout unchanged).
+
+Upload BOTH files into the existing GitHub app/ folder, not the repository root:
+  app/transactions.tsx
+  app/transaction-actions.tsx
+No new SQL or Edge Function changes. Existing offer and firm document templates and Fix 105 RPC must be installed.
+
+New sale / convert listing > Direct Sold: select all required documents on the initial form (signed unconditional CPS PDF, commission disclosure, representation disclosure, applicable client IDs, title, PDS, deposit proof, trade record sheet, sale report form, receipt of funds; optional addenda). Save documents & continue to commission. The signed CPS is uploaded once and linked to offer and firm requirements. The same draft is used for commission/GST/deposit and lawyer contacts. Final submit uses the existing Fix 105 RPC and reviewer/approval safeguards. The database still stores an accepted-offer draft until firm submission; existing informational visibility/notification may occur before final submission, but no firm approval is requested until final submission. Existing conditional offers remain unchanged. If the browser is reloaded before final submission, the initial wizard handoff is not persisted; the saved documents remain on the transaction and the existing actions can be used to complete it. No changes to payout or ledger code. Test on a new direct sale for each representation and an ordinary accepted offer before using live files. If missing templates or reviewer error appears, do not bypass validation.

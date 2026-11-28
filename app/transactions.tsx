@@ -4,7 +4,7 @@ import {getSupabase} from '../lib/supabase';
 import ManualContactInput from './manual-contact-input';
 import {currentTransactionIndex} from '../lib/current-transaction.mjs';
 import AgentReports from './agent-reports';
-import TransactionActions from './transaction-actions';
+import TransactionActions, {firmDocumentFields, type FirmKey} from './transaction-actions';
 import StagedDocumentUpload from './staged-document-upload';
 import PostFirmDetails from './post-firm-details';
 import {listingStatus,type ListingTerms} from '../lib/listing-status';
@@ -31,13 +31,19 @@ function submittedDocumentStage(doc:Doc){
 type DealInput=Omit<Deal,'id'|'user_id'|'review_status'|'review_notes'|'brokerage_id'|'transaction_number'|'buyer_lawyer'|'seller_lawyer'|'rv_stage'|'rv_firm_date'|'rv_completed_date'|'rv_completion_letter'|'rv_funds_verified'|'updated_at'>;
 const fresh=(kind:string):DealInput=>({pid:'',legal_description:'',contract_date:null,possession_date:null,adjustment_date:null,deposit_due_date:null,cooperating_brokerage:'',cooperating_agent:'',cooperating_email:'',parent_listing_id:null,kind,address:'',client_name:'',mls_number:'',price:null,sale_price:null,listing_date:null,subject_date:null,completion_date:null,notes:'',buyer_name:'',seller_name:'',buyer_lawyer_id:null,seller_lawyer_id:null,representation:'selling',listing_commission:0,selling_commission:0,deposit_amount:0,deposit_holder:'our_brokerage',deposit_brokerage:'',gst_rate:5});
 
-type OfferAttachment = { label:string; title:string; multiple?:boolean; required:boolean };
+type OfferAttachment = { label:string; title:string; multiple?:boolean; required:boolean; phase?:'offer'|'firm'; pdfOnly?:boolean };
 const requiredOfferAttachments=(side:'listing'|'selling'):OfferAttachment[]=>[
  {label:'Signed purchase and sale contract',title:'Accepted Offer / Contract of Purchase and Sale (CPS)',required:true},
  {label:'Commission disclosure',title:'Commission Disclosure',required:true},
  {label:'Disclosure of services / representation',title:'Disclosure of Services / Representation',required:true},
  {label:side==='listing'?'FINTRAC identity verification — seller(s)':'FINTRAC identity verification — buyer(s)',title:side==='listing'?'Seller ID(s)':'Buyer ID(s)',multiple:true,required:true},
  {label:'Contract addendum (if applicable)',title:'Additional addendum(s), if any',multiple:true,required:false}
+];
+// Direct Sold uses one signed unconditional CPS for both compliance requirements.
+const directSaleAttachments=(side:'listing'|'selling'):OfferAttachment[]=>[
+ ...requiredOfferAttachments(side).filter(f=>f.required).map(f=>f.label==='Signed purchase and sale contract'?{...f,title:'Signed unconditional Contract of Purchase and Sale (PDF)',pdfOnly:true}:f),
+ ...firmDocumentFields.filter(f=>f.key!=='signed'&&(!f.representation||f.representation===side)).map(f=>({label:f.template,title:f.label,required:true,phase:'firm' as const})),
+ ...requiredOfferAttachments(side).filter(f=>!f.required)
 ];
 const acceptedOfferAllowed=/\.(pdf|png|jpe?g|docx?|xlsx?|txt)$/i;
 export default function Transactions({userId,backOffice,view,notify,initialDealId,initialFocus}:{userId:string;backOffice:boolean;view:string;initialDealId?:string;initialFocus?:string;notify:(s:string)=>void}){
@@ -57,9 +63,9 @@ export default function Transactions({userId,backOffice,view,notify,initialDealI
  const [requiredReady,setRequiredReady]=useState(false);
  const [extraDocName,setExtraDocName]=useState('');
   const [offerOutcome,setOfferOutcome]=useState<'conditional'|'direct_sold'>('conditional');
-  const [pendingDirectSold,setPendingDirectSold]=useState<string|null>(null);
+  const [pendingDirectSold,setPendingDirectSold]=useState<{id:string;documents:Partial<Record<FirmKey,string>>}|null>(null);
   const [offerAttachments,setOfferAttachments]=useState<Record<string,File[]>>({});
-  const [savedOfferAttachmentIds,setSavedOfferAttachmentIds]=useState<Record<string,boolean>>({});
+  const [savedOfferAttachmentIds,setSavedOfferAttachmentIds]=useState<Record<string,string>>({});
  const [rows,setRows]=useState<Deal[]>([]),[loadedDocs,setDocs]=useState<Doc[]>([]),[selected,setSelected]=useState<string|null>(null),[editing,setEditing]=useState<(ReturnType<typeof fresh>&{id?:string})|null>(null),[busy,setBusy]=useState(false),[error,setError]=useState(''),[loading,setLoading]=useState(true),[query,setQuery]=useState(''),[review,setReview]=useState('');
  const [listingTerms,setListingTerms]=useState<ListingTerms[]>([]),[listingFilter,setListingFilter]=useState('All statuses'),[,setTodayTick]=useState(0),[statusError,setStatusError]=useState('');
  function beginEdit(d:DealInput&{id?:string;buyer_lawyer?:Lawyer|null;seller_lawyer?:Lawyer|null}){setOfferOutcome('conditional');setOfferAttachments({});setSavedOfferAttachmentIds({});setEditing(d);setExpiry(listingTerms.find(t=>t.id===d.id)?.expiry_date||'')}
@@ -205,24 +211,27 @@ export default function Transactions({userId,backOffice,view,notify,initialDealI
    await run(async()=>{
     const {id}=editing;
     const creatingAcceptedOffer=editing.kind==='Sale'&&!id;
-    const offerFields=editing.kind==='Sale'?requiredOfferAttachments(editing.representation):[];
+    const directEntry=editing.kind==='Sale'&&offerOutcome==='direct_sold';
+    const offerFields=editing.kind==='Sale'?(directEntry?directSaleAttachments(editing.representation):requiredOfferAttachments(editing.representation)):[];
     // The agent must select the required documents on THIS screen when making an Accepted Offer.
     // A partially saved sale can be retried with the same file and the selected browser files.
-    if(creatingAcceptedOffer){
-     const missing=offerFields.filter(f=>f.required&&!offerAttachments[f.label]?.length);
-     if(missing.length)throw new Error('Before accepting the offer, select: '+missing.map(f=>f.title).join(', '));
+    if(creatingAcceptedOffer||directEntry){
+     const missing=offerFields.filter(f=>f.required&&!offerAttachments[f.label]?.length&&!savedOfferAttachmentIds[f.label+'|0']);
+     if(missing.length)throw new Error('Select all required documents: '+missing.map(f=>f.title).join(', '));
     }
-    for(const files of Object.values(offerAttachments))for(const file of files){
+    for(const field of offerFields)for(const file of offerAttachments[field.label]||[]){
+     if(field.pdfOnly&&(!/\.pdf$/i.test(file.name)||(file.type&&file.type!=='application/pdf')))throw new Error('The signed unconditional CPS must be a PDF.');
      if(!acceptedOfferAllowed.test(file.name)||file.size<1||file.size>20*1024*1024)
       throw new Error(file.name+': use PDF, image, Word, Excel or TXT (maximum 20 MB).');
     }
     // Preflight mandatory template definitions BEFORE inserting a sale, so an unconfigured
     // brokerage doesn't accumulate new Accepted Offer drafts from failed submissions.
-    if(creatingAcceptedOffer){
-     const templateCheck=await db.from('rv_compliance_templates').select('label,required,representation').eq('kind','Sale').eq('phase','offer').eq('active',true);
+    if(creatingAcceptedOffer||directEntry){
+     const templateCheck=await db.from('rv_compliance_templates').select('label,required,representation,phase').eq('kind','Sale').in('phase',directEntry?['offer','firm']:['offer']).eq('active',true);
      if(templateCheck.error)throw new Error('Cannot read Accepted Offer document requirements: '+templateCheck.error.message);
-     const missingTemplates=offerFields.filter(f=>f.required&&!templateCheck.data?.some(t=>t.label===f.label&&t.required&&(t.representation==='any'||t.representation===editing.representation)));
-     if(missingTemplates.length)throw new Error('Accepted Offer required categories missing. Install the Accepted Offer SQL before saving this sale: '+missingTemplates.map(f=>f.title).join(', '));
+     const missingTemplates=offerFields.filter(f=>f.required&&!templateCheck.data?.some(t=>t.label===f.label&&t.phase===(f.phase||'offer')&&t.required&&(t.representation==='any'||t.representation===editing.representation)));
+     if(missingTemplates.length)throw new Error('Required document categories missing: '+missingTemplates.map(f=>f.title).join(', '));
+     if(directEntry&&!templateCheck.data?.some(t=>t.label==='Signed subject removal / unconditional contract'&&t.phase==='firm'&&t.required&&(t.representation==='any'||t.representation===editing.representation)))throw new Error('Missing firm-sale signed contract category. Ask Back Office to install the transaction templates.');
     }
     const values=Object.fromEntries(Object.keys(fresh(editing.kind)).map(k=>[k,editing[k as keyof DealInput]]));
     values.address=editing.address.trim();
@@ -234,14 +243,15 @@ export default function Transactions({userId,backOffice,view,notify,initialDealI
      const t=await db.from('listing_terms').upsert({deal_id:r.data.id,expiry_date:expiry});
      if(t.error){setEditing({...editing,id:r.data.id});throw t.error}
     }
-    if(editing.kind==='Sale'&&(creatingAcceptedOffer||Object.keys(offerAttachments).length>0)){
+    let directDocuments:Partial<Record<FirmKey,string>>={};
+    if(editing.kind==='Sale'&&(creatingAcceptedOffer||directEntry||Object.keys(offerAttachments).length>0)){
      // Persist the ID immediately so a failed upload retries the same sale instead of creating a duplicate.
      setEditing({...editing,id:r.data.id});
      const required=offerFields.filter(f=>f.required);
      const templates=await db.from('rv_compliance_templates').select('label,required,representation,active,phase')
-       .eq('brokerage_id',r.data.brokerage_id).eq('kind','Sale').eq('phase','offer').eq('active',true);
+       .eq('brokerage_id',r.data.brokerage_id).eq('kind','Sale').in('phase',directEntry?['offer','firm']:['offer']).eq('active',true);
      if(templates.error)throw new Error('Could not load Accepted Offer requirements: '+templates.error.message);
-     const missingTemplates=required.filter(f=>!templates.data?.some(t=>t.label===f.label&&(t.representation==='any'||t.representation===editing.representation)&&t.required));
+     const missingTemplates=required.filter(f=>!templates.data?.some(t=>t.label===f.label&&t.phase===(f.phase||'offer')&&(t.representation==='any'||t.representation===editing.representation)&&t.required));
      if(missingTemplates.length)throw new Error('Accepted Offer requirements are missing in Supabase. Install Fix 063 SQL, then retry the same sale: '+missingTemplates.map(f=>f.title).join(', '));
      const uploaded={...savedOfferAttachmentIds};
      for(const field of offerFields){
@@ -250,7 +260,7 @@ export default function Transactions({userId,backOffice,view,notify,initialDealI
        const key=field.label+'|'+i;
        if(uploaded[key])continue;
        const file=files[i];
-       const path=`${userId}/${r.data.id}/offer/${crypto.randomUUID()}-${file.name.replace(/[^A-Za-z0-9._-]/g,'_')}`;
+       const path=`${userId}/${r.data.id}/${field.phase||'offer'}/${crypto.randomUUID()}-${file.name.replace(/[^A-Za-z0-9._-]/g,'_')}`;
        const stored=await db.storage.from('transaction-files').upload(path,file,{upsert:false});
        if(stored.error)throw new Error('Could not upload '+field.title+': '+stored.error.message);
        const registered=await db.from('deal_documents').insert({deal_id:r.data.id,name:file.name,path}).select('id').single();
@@ -260,19 +270,34 @@ export default function Transactions({userId,backOffice,view,notify,initialDealI
         p_additional:i>0
        });
        if(linked.error)throw new Error('Uploaded '+file.name+' but could not link '+field.title+': '+linked.error.message);
-       uploaded[key]=true;setSavedOfferAttachmentIds({...uploaded});
+       uploaded[key]=registered.data.id;setSavedOfferAttachmentIds({...uploaded});
       }
      }
      // Verify that required documents have actually been linked, not just selected in the browser.
-     const check=await db.from('deal_requirements').select('label,document_id').eq('deal_id',r.data.id).eq('rv_phase','offer').eq('rv_required',true);
+     const check=await db.from('deal_requirements').select('label,document_id,rv_phase').eq('deal_id',r.data.id).in('rv_phase',directEntry?['offer','firm']:['offer']).eq('rv_required',true);
      if(check.error)throw check.error;
-     const missing=required.filter(f=>!check.data?.some(x=>x.label===f.label&&x.document_id));
-     if(missing.length)throw new Error('Accepted Offer is not document-complete: '+missing.map(f=>f.title).join(', '));
+     const missing=required.filter(f=>!check.data?.some(x=>x.label===f.label&&x.rv_phase===(f.phase||'offer')&&x.document_id));
+     if(missing.length)throw new Error('Transaction is not document-complete: '+missing.map(f=>f.title).join(', '));
+     if(directEntry){
+      const cps=check.data?.find(x=>x.label==='Signed purchase and sale contract'&&x.rv_phase==='offer')?.document_id;
+      if(!cps)throw new Error('Signed unconditional CPS is missing.');
+      const signed=check.data?.find(x=>x.label==='Signed subject removal / unconditional contract'&&x.rv_phase==='firm')?.document_id;
+      if(signed!==cps){
+       const link=await db.rpc('rv_link_uploaded_compliance_doc',{p_deal:r.data.id,p_document:cps,p_template_label:'Signed subject removal / unconditional contract',p_additional:false});
+       if(link.error)throw new Error('Could not link signed CPS to firm-sale compliance: '+link.error.message);
+      }
+      directDocuments={signed:cps};
+      for(const f of firmDocumentFields.filter(f=>f.key!=='signed'&&(!f.representation||f.representation===editing.representation))){
+       const docId=check.data?.find(x=>x.label===f.template&&x.rv_phase==='firm')?.document_id;
+       if(!docId)throw new Error('Missing saved document: '+f.label);
+       directDocuments[f.key]=docId;
+      }
+     }
     }
     await reload();await loadStatuses();setSelected(r.data.id);setEditing(null);
-    if(creatingAcceptedOffer&&offerOutcome==='direct_sold')setPendingDirectSold(r.data.id);
+    if(directEntry)setPendingDirectSold({id:r.data.id,documents:directDocuments});
     setOfferAttachments({});setSavedOfferAttachmentIds({});
-    notify(creatingAcceptedOffer?(offerOutcome==='direct_sold'?'Accepted Offer documents saved. Continue below with Direct Sold documents, commission + GST, deposit holder and lawyer contacts, then submit once to Back Office.':'Accepted Offer saved with required documents. Back Office notified; no approval needed at this stage.'):'Transaction saved');
+    notify(directEntry?'All Direct Sold documents saved. Continue with commission, GST, deposit and lawyer contacts; final submission goes to Back Office.':creatingAcceptedOffer?'Accepted Offer saved with required documents. Back Office notified; no approval needed at this stage.':'Transaction saved');
    });
   }
  async function change(status:string){if(!active)return;await run(async()=>{
@@ -365,23 +390,23 @@ export default function Transactions({userId,backOffice,view,notify,initialDealI
  });
  if(['Commission earned to date','Commission report','Yearly GST report','Deductions & expenses'].includes(view))return <AgentReports userId={userId} view={view}/>;
  return <><div className="headrow"><div><h1>{view==='Closed Files'||view==='Closed files'?'Closed Files':backOffice?'Back Office':'Transactions'}</h1><p>{view==='Closed Files'||view==='Closed files'?'Read-only completed sales and their retained transaction documents.':backOffice?'Review submitted agent files and documents.':'Create a listing, convert it to a sale, or add a sale directly.'}</p></div><div className="actions"><button className="btn" disabled={busy} onClick={()=>{void reload();void loadStatuses();setDocumentRevision(n=>n+1)}}>Refresh</button>{!backOffice&&view!=='Closed Files'&&['Listing','Sale'].map(k=><button key={k} className="btn primary" disabled={busy} onClick={()=>{setSelected(null);beginEdit(fresh(k))}}>＋ Add {k.toLowerCase()}</button>)}</div></div>{error&&<div className="notice" role="alert">{error}</div>}{statusError&&<div className="notice">{statusError}</div>}
- {editing?<form className="panel" autoComplete="off" onSubmit={save}><h2>{editing.id?'Edit':'New'} {editing.kind.toLowerCase()}</h2><div className="crm-form-grid">{['address','mls_number','pid','legal_description',...(editing.kind==='Listing'?['client_name','price','listing_date']:['buyer_name','seller_name','cooperating_brokerage','cooperating_agent','cooperating_email','sale_price','contract_date','subject_date','deposit_due_date','completion_date','possession_date','adjustment_date'])].map(k=><div className="field" key={k}><label htmlFor={'deal-'+k}>{({address:'Property address',client_name:'Seller legal name(s)',pid:'PID',legal_description:'Legal description',contract_date:'Contract acceptance date',possession_date:'Possession date',adjustment_date:'Adjustment date',deposit_due_date:'Deposit due date',cooperating_brokerage:'Cooperating brokerage',cooperating_agent:'Cooperating Realtor',cooperating_email:'Cooperating Realtor email',mls_number:'MLS number',price:'List price (CAD)',sale_price:'Sale price (CAD)',listing_date:'Listing date',subject_date:'Subject removal date',completion_date:'Completion date',buyer_name:'Buyer legal name(s)',seller_name:'Seller legal name(s)'} as Record<string,string>)[k]}</label>{['cooperating_brokerage','cooperating_agent','cooperating_email'].includes(k)?<ManualContactInput id={'deal-'+k} required={k==='cooperating_brokerage'} inputMode={k==='cooperating_email'?'email':'text'} value={String(editing[k as keyof typeof editing]??'')} onChange={text=>setEditing({...editing,[k]:text})}/>:<input id={'deal-'+k} autoComplete="off" required={['address','client_name','listing_date','price','pid','legal_description','sale_price','contract_date','buyer_name','seller_name','cooperating_brokerage'].includes(k)} type={k.includes('price')?'number':k.endsWith('date')?'date':'text'} min={k.includes('price')?'0':undefined} step={k.includes('price')?'.01':undefined} maxLength={500} value={String(editing[k as keyof typeof editing]??'')} onChange={e=>setEditing({...editing,[k]:k.includes('price')?(e.target.value?Number(e.target.value):null):k.endsWith('date')?(e.target.value||null):e.target.value})}/>}</div>)}</div>{editing.kind==='Listing'&&<div className="field"><label>Listing expiry date</label><input required type="date" min={editing.listing_date||undefined} value={expiry} onChange={e=>setExpiry(e.target.value)}/></div>}{editing.kind==='Sale'&&<><div className="field"><label htmlFor="deal-representation">Our side of the transaction</label><select id="deal-representation" value={editing.representation} onChange={e=>setEditing({...editing,representation:e.target.value as 'listing'|'selling'})}><option value="selling">Selling / buyer side</option><option value="listing">Listing / seller side</option></select></div>{!editing.id&&<fieldset style={{gridColumn:'1 / -1',margin:'12px 0',padding:15,border:'1px solid #cedcd1',borderRadius:11}}>
+ {editing?<form className="panel" autoComplete="off" onSubmit={save}><h2>{editing.id?'Edit':'New'} {editing.kind.toLowerCase()}</h2><div className="crm-form-grid">{['address','mls_number','pid','legal_description',...(editing.kind==='Listing'?['client_name','price','listing_date']:['buyer_name','seller_name','cooperating_brokerage','cooperating_agent','cooperating_email','sale_price','contract_date',...(offerOutcome==='direct_sold'?[]:['subject_date']),'deposit_due_date','completion_date','possession_date','adjustment_date'])].map(k=><div className="field" key={k}><label htmlFor={'deal-'+k}>{({address:'Property address',client_name:'Seller legal name(s)',pid:'PID',legal_description:'Legal description',contract_date:'Contract acceptance date',possession_date:'Possession date',adjustment_date:'Adjustment date',deposit_due_date:'Deposit due date',cooperating_brokerage:'Cooperating brokerage',cooperating_agent:'Cooperating Realtor',cooperating_email:'Cooperating Realtor email',mls_number:'MLS number',price:'List price (CAD)',sale_price:'Sale price (CAD)',listing_date:'Listing date',subject_date:'Subject removal date',completion_date:'Completion date',buyer_name:'Buyer legal name(s)',seller_name:'Seller legal name(s)'} as Record<string,string>)[k]}</label>{['cooperating_brokerage','cooperating_agent','cooperating_email'].includes(k)?<ManualContactInput id={'deal-'+k} required={k==='cooperating_brokerage'} inputMode={k==='cooperating_email'?'email':'text'} value={String(editing[k as keyof typeof editing]??'')} onChange={text=>setEditing({...editing,[k]:text})}/>:<input id={'deal-'+k} autoComplete="off" required={['address','client_name','listing_date','price','pid','legal_description','sale_price','contract_date','buyer_name','seller_name','cooperating_brokerage'].includes(k)} type={k.includes('price')?'number':k.endsWith('date')?'date':'text'} min={k.includes('price')?'0':undefined} step={k.includes('price')?'.01':undefined} maxLength={500} value={String(editing[k as keyof typeof editing]??'')} onChange={e=>setEditing({...editing,[k]:k.includes('price')?(e.target.value?Number(e.target.value):null):k.endsWith('date')?(e.target.value||null):e.target.value})}/>}</div>)}</div>{editing.kind==='Listing'&&<div className="field"><label>Listing expiry date</label><input required type="date" min={editing.listing_date||undefined} value={expiry} onChange={e=>setExpiry(e.target.value)}/></div>}{editing.kind==='Sale'&&<><div className="field"><label htmlFor="deal-representation">Our side of the transaction</label><select id="deal-representation" value={editing.representation} disabled={busy||Object.keys(savedOfferAttachmentIds).length>0} onChange={e=>setEditing({...editing,representation:e.target.value as 'listing'|'selling'})}><option value="selling">Selling / buyer side</option><option value="listing">Listing / seller side</option></select></div>{!editing.id&&<fieldset style={{gridColumn:'1 / -1',margin:'12px 0',padding:15,border:'1px solid #cedcd1',borderRadius:11}}>
   <legend style={{fontWeight:800,padding:'0 6px'}}>How is this offer proceeding?</legend>
   <label style={{display:'block',marginBottom:10}}><input type="radio" name="offer-outcome" checked={offerOutcome==='conditional'} onChange={()=>setOfferOutcome('conditional')}/> Accepted Offer — subjects outstanding (no Back Office approval yet)</label>
-  <label style={{display:'block'}}><input type="radio" name="offer-outcome" checked={offerOutcome==='direct_sold'} onChange={()=>setOfferOutcome('direct_sold')}/> Direct Sold — unconditional / no subjects (continue to firm-sale approval)</label>
+  <label style={{display:'block'}}><input type="radio" name="offer-outcome" checked={offerOutcome==='direct_sold'} onChange={()=>{setOfferOutcome('direct_sold');setEditing(v=>v?{...v,subject_date:null}:v)}}/> Direct Sold — unconditional / no subjects (continue to firm-sale approval)</label>
  </fieldset>}
- <p className="hint">{offerOutcome==='direct_sold'&&!editing.id?'After you attach the required offer documents, RealVolt will open the Direct Sold submission steps right away: firm-sale documents, commission + GST, deposit holder and lawyer contacts. Submit that complete package to Back Office for approval.':'At Accepted Offer, save the required documents and notify Back Office. There is no compliance approval until Subjects Removed.'}</p>
+ <p className="hint">{offerOutcome==='direct_sold'?'Upload all Direct Sold documents here, then enter commission, GST, deposit and lawyer information. Submit the complete package to Back Office for approval.':'At Accepted Offer, save the required documents and notify Back Office. There is no compliance approval until Subjects Removed.'}</p>
  {(!editing.id||Object.keys(offerAttachments).length>0)&&<fieldset style={{gridColumn:'1 / -1',border:'1px solid #d0ded3',borderRadius:12,padding:15,margin:'12px 0'}}>
-  <legend style={{fontWeight:800,padding:'0 6px'}}>Accepted Offer — required documents before saving</legend>
-  <p className="hint">Select these documents now. The file and its documents will be visible in Back Office; approval is not needed until Subjects Removed / Direct Sold. Client IDs remain private.</p>
-  {requiredOfferAttachments(editing.representation).map(field=><div className="field" key={field.label} style={{marginBottom:12}}>
+  <legend style={{fontWeight:800,padding:'0 6px'}}>{offerOutcome==='direct_sold'?'Direct Sold — all required documents':'Accepted Offer — required documents before saving'}</legend>
+  <p className="hint">{offerOutcome==='direct_sold'?'Step 1 of 3 — Upload the complete document package here. No separate subject removal or second CPS upload is required. Approval follows final submission.':'Select these documents now. The file and its documents will be visible in Back Office; approval is not needed until Subjects Removed / Direct Sold. Client IDs remain private.'}</p>
+  {(offerOutcome==='direct_sold'?directSaleAttachments(editing.representation):requiredOfferAttachments(editing.representation)).map(field=><div className="field" key={field.label} style={{marginBottom:12}}>
    <label htmlFor={'offer-'+field.label}>{field.title} {field.required&&<strong style={{color:'#a34422'}}>(Required)</strong>}</label>
-   <input id={'offer-'+field.label} type="file" accept=".pdf,.png,.jpg,.jpeg,.doc,.docx,.xls,.xlsx,.txt" multiple={field.multiple} disabled={busy||!!savedOfferAttachmentIds[field.label+'|0']}
+   <input id={'offer-'+field.label} type="file" accept={field.pdfOnly?'.pdf,application/pdf':'.pdf,.png,.jpg,.jpeg,.doc,.docx,.xls,.xlsx,.txt'} multiple={field.multiple} disabled={busy||!!savedOfferAttachmentIds[field.label+'|0']}
     onChange={e=>setOfferAttachments(prev=>({...prev,[field.label]:Array.from(e.target.files||[])}))}/>
    {!!offerAttachments[field.label]?.length&&<small>{offerAttachments[field.label].map(f=>f.name).join(' · ')} {savedOfferAttachmentIds[field.label+'|0']?'— saved':''}</small>}
   </div>)}
  </fieldset>}
- </>}<div className="field"><label htmlFor="deal-notes">Notes</label><textarea id="deal-notes" value={editing.notes} onChange={e=>setEditing({...editing,notes:e.target.value})}/></div><div className="actions"><button className="btn primary" disabled={busy}>{editing.kind==='Sale'&&(!editing.id||Object.keys(offerAttachments).length>0)?(offerOutcome==='direct_sold'?'Continue to Direct Sold →':'Save Accepted Offer + Documents'):'Save transaction'}</button><button type="button" className="btn" disabled={busy} onClick={()=>{setEditing(null);setOfferAttachments({});setSavedOfferAttachmentIds({})}}>Cancel</button></div></form>:active?<section className="panel" style={stageBorder(active)}><button className="btn" disabled={busy} onClick={()=>{setSelected(null);window.dispatchEvent(new CustomEvent('realvolt:clear-transaction-link'))}}>{view==='Closed Files'||view==='Closed files'?'← Closed Files':'← All files'}</button><div className="sectionhead"><div><h2>{labelFor(active)} — {active.address}</h2><p>{active.kind} · {active.client_name}</p><p className="hint"><b>Realtor:</b> {fileOwnerName||"Name not available in agent profile"}</p>{active.parent_listing_id&&<p className="hint">Linked listing: {rows.find(r=>r.id===active.parent_listing_id)?labelFor(rows.find(r=>r.id===active.parent_listing_id)!):active.parent_listing_id}</p>}</div><div className="actions"><span className="badge" style={stageBadge(active)}>{visibleStage(active)}</span><span className="badge">{active.kind==='Sale'&&active.rv_stage==='Accepted offer'&&active.review_status==='Draft'?'No approval required':active.review_status}</span></div></div>
+ </>}<div className="field"><label htmlFor="deal-notes">Notes</label><textarea id="deal-notes" value={editing.notes} onChange={e=>setEditing({...editing,notes:e.target.value})}/></div><div className="actions"><button className="btn primary" disabled={busy}>{editing.kind==='Sale'&&(!editing.id||Object.keys(offerAttachments).length>0)?(offerOutcome==='direct_sold'?'Save documents & continue to commission →':'Save Accepted Offer + Documents'):'Save transaction'}</button><button type="button" className="btn" disabled={busy} onClick={()=>{setEditing(null);setOfferAttachments({});setSavedOfferAttachmentIds({})}}>Cancel</button></div></form>:active?<section className="panel" style={stageBorder(active)}><button className="btn" disabled={busy} onClick={()=>{setSelected(null);window.dispatchEvent(new CustomEvent('realvolt:clear-transaction-link'))}}>{view==='Closed Files'||view==='Closed files'?'← Closed Files':'← All files'}</button><div className="sectionhead"><div><h2>{labelFor(active)} — {active.address}</h2><p>{active.kind} · {active.client_name}</p><p className="hint"><b>Realtor:</b> {fileOwnerName||"Name not available in agent profile"}</p>{active.parent_listing_id&&<p className="hint">Linked listing: {rows.find(r=>r.id===active.parent_listing_id)?labelFor(rows.find(r=>r.id===active.parent_listing_id)!):active.parent_listing_id}</p>}</div><div className="actions"><span className="badge" style={stageBadge(active)}>{visibleStage(active)}</span><span className="badge">{active.kind==='Sale'&&active.rv_stage==='Accepted offer'&&active.review_status==='Draft'?'No approval required':active.review_status}</span></div></div>
 
  <div aria-label="Realtor identity throughout transaction" style={{position:'sticky',top:0,zIndex:12,padding:'9px 12px',margin:'12px 0',border:'1px solid #c8d8cc',borderRadius:10,background:'#f4f8f1',display:'flex',gap:12,alignItems:'center',flexWrap:'wrap',boxShadow:'0 2px 8px #183e3214'}}><strong>Realtor: {fileOwnerName||'Agent profile name unavailable'}</strong><span>{labelFor(active)} · {active.address}</span><span style={{marginLeft:'auto',color:stageColor(active)||undefined,fontWeight:700}}>{visibleStage(active)}</span></div>
  <div className="crm-form-grid">{(active.kind==='Listing'?['mls_number','pid','legal_description','price','listing_date']:['mls_number','pid','legal_description','buyer_name','seller_name','sale_price','contract_date','subject_date','completion_date','rv_firm_date','rv_completed_date']).map(k=><p key={k}><b>{k.replaceAll('_',' ')}:</b> {String(active[k as keyof Deal]??'—')}</p>)}</div><TransactionDepositSummary key={userId+'-'+active.id+'-'+String(backOffice)} deal={active} revision={documentRevision} backOffice={backOffice}/>{(backOffice||active.user_id===userId)&&active.kind==='Sale'&&active.rv_stage==='Sold'&&active.deposit_holder==='our_brokerage'&&['Submitted','Approved','Changes requested'].includes(active.review_status)&&<TransactionTrustReceipt key={active.id} deal={active} office={backOffice} notify={notify} onSaved={refreshFile}/>}{active.kind==='Sale'&&<details style={{marginTop:8,marginBottom:10}}><summary style={{cursor:'pointer'}}>Other brokerage contact (if applicable)</summary><p><b>Cooperating brokerage:</b> {active.cooperating_brokerage||'—'}</p><p><b>Cooperating Realtor:</b> {active.cooperating_agent||'—'}</p></details>}<p style={{whiteSpace:'pre-wrap'}}>{active.notes}</p>{active.review_status==='Changes requested'&&active.review_notes&&<div className="notice">Admin feedback: {active.review_notes}</div>}{!backOffice&&active.user_id===userId&&active.review_status==='Changes requested'&&!['Completed','Archived','Collapsed'].includes(active.rv_stage||'')&&<div id="rv-agent-resubmit-corrections" role="region" aria-label="Resubmit corrected transaction" style={{border:'1px solid #d6c8b1',borderRadius:10,padding:16,margin:'14px 0',background:'#fcfaf5'}}><strong>Changes requested by Back Office</strong><p className="hint">Correct the files or details above, then resubmit this same transaction. It will return to the Submitted review queue and notify your assigned admin.</p><button type="button" className="btn primary" disabled={busy||(active.kind==='Listing'&&!requiredReady)} onClick={()=>void change('Submitted')}>{busy?'Resubmitting…':'Resubmit changes to Back Office'}</button>{active.kind==='Listing'&&!requiredReady&&<p className="hint">Attach all required listing documents before resubmitting.</p>}</div>}
@@ -421,7 +446,7 @@ export default function Transactions({userId,backOffice,view,notify,initialDealI
    <h3 style={{fontSize:18,marginBottom:8}}>2. Review compliance & approve</h3>
    <DirectFileReview key={active.id} dealId={active.id} stage={active.rv_stage} agentName={fileOwnerName} docs={docs} revision={documentRevision} busy={busy} review={review} onReviewChange={setReview} onApprove={()=>void change('Approved')} onRequestChanges={()=>void change('Changes requested')} onReviewUpdated={()=>setDocumentRevision(n=>n+1)}/>
   </div>}
- {!backOffice&&active.rv_stage!=='Archived'&&!statusError&&<TransactionActions key={active.id} initialDirectSold={pendingDirectSold===active.id&&active.rv_stage==='Accepted offer'} agentName={fileOwnerName} deal={active} docs={docs} office={false} linked={linked(active)||['Expired','Terminated','Termination pending'].includes(statusFor(active))} notify={notify} reload={refreshFile} onEdit={()=>beginEdit({...active})} onConvert={()=>beginEdit({...fresh('Sale'),address:active.address,mls_number:active.mls_number,pid:active.pid,legal_description:active.legal_description,seller_name:active.seller_name||active.client_name,client_name:active.client_name,representation:'listing',parent_listing_id:active.id})}/>}
+ {!backOffice&&active.rv_stage!=='Archived'&&!statusError&&<TransactionActions key={active.id} initialDirectSold={pendingDirectSold?.id===active.id&&active.rv_stage==='Accepted offer'} initialFirmSaved={pendingDirectSold?.id===active.id?pendingDirectSold.documents:undefined} agentName={fileOwnerName} deal={active} docs={docs} office={false} linked={linked(active)||['Expired','Terminated','Termination pending'].includes(statusFor(active))} notify={notify} reload={refreshFile} onEdit={()=>beginEdit({...active})} onConvert={()=>beginEdit({...fresh('Sale'),address:active.address,mls_number:active.mls_number,pid:active.pid,legal_description:active.legal_description,seller_name:active.seller_name||active.client_name,client_name:active.client_name,representation:'listing',parent_listing_id:active.id})}/>}
  {backOffice&&active.kind==='Sale'&&active.rv_stage==='Sold'&&active.review_status==='Approved'&&
   <section aria-label="CIR and lawyer email step" style={{marginTop:18}}>
    <h3 style={{fontSize:18,margin:'0 0 8px'}}>3. CIR & lawyer email — approved file</h3>
