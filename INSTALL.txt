@@ -1,6 +1,10 @@
-RealVolt 035 hotfix, based on 034.
-1. Run supabase/035_transaction_attachment_fix.sql in Supabase as project owner. Do not rerun 034.
-2. Replace only app/transactions.tsx in GitHub with the matching file in this ZIP (merge if changed since 034).
-3. After build, test removing an unlinked test PDF, attaching a replacement, and marking a test sale firm.
-Removed files are retained in private storage with a metadata record and audit event, not physically erased. Ordinary users cannot download removed files; assigned reviewers can access the retained metadata via API. Protected checklist/lifecycle documents and sent/pending conveyancing records are not silently removed.
-No Edge Functions or other code changes. Live database execution and full build remain untested.
+RealVolt — Fix 104 consolidated upload (Fixes 101–103)
+Based on the supplied crmsocial-main (10).zip, which contains the Fix 100 transaction file.
+
+GITHUB: Navigate INTO the existing app folder and upload the six files from this package's app folder together. Replace the three existing files and add the three missing files. Do not upload these TSX files into the root of the repository. If the live repository contains misplaced root copies of transactions.tsx, transaction-trust-receipt.tsx or transaction-deposit-summary.tsx, remove those root copies only. They are absent from the supplied snapshot.
+
+SUPABASE: The two original SQL scripts are included for reference and installation if not already applied. Check 102 then 103 in SQL Editor; do not assume a file uploaded to GitHub is installed in Supabase. No new SQL changes are introduced by this package.
+
+Redeploy on Hostinger and test transaction display, lawyer suggestions, trust receipt posting and privacy. Do not post the same deposit twice.
+
+Validation: all relative imports of the six patched files resolve in the supplied snapshot plus patch; TypeScript syntax checked. Full build and live database tests not performed.
