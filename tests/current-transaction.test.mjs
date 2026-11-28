@@ -1,0 +1,13 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {currentTransactionIndex as group} from '../lib/current-transaction.mjs';
+const listing={id:'L1',kind:'Listing',user_id:'A',brokerage_id:'B',review_status:'Approved'};
+const sale={id:'S1',kind:'Sale',user_id:'A',brokerage_id:'B',review_status:'Approved',rv_stage:'Sold',parent_listing_id:'L1'};
+const ids=r=>r.rows.map(d=>d.id);
+test('approved listing and linked sold sale become one visible record, old links route to sale',()=>{const r=group([listing,sale]);assert.deepEqual(ids(r),['S1']);assert.equal(r.currentId('L1'),'S1');assert.equal(r.currentId('S1'),'S1');});
+test('accepted offer, completed and archived sale replace listing',()=>{for(const [rv_stage,review_status] of [['Accepted offer','Draft'],['Sold','Submitted'],['Completed','Approved'],['Archived','Approved']]){assert.deepEqual(ids(group([listing,{...sale,rv_stage,review_status}])),['S1']);}});
+test('collapsed or deleted offers restore the original listing',()=>{assert.deepEqual(ids(group([listing,{...sale,rv_stage:'Collapsed'}])),['L1','S1']);assert.deepEqual(ids(group([listing,{...sale,rv_deleted_at:'2026-11-27'}])),['L1']);});
+test('unsubmitted sold draft does not hide listing',()=>assert.deepEqual(ids(group([listing,{...sale,review_status:'Draft'}])),['L1','S1']));
+test('no grouping across brokerages or different owners, or by address',()=>{for(const patch of [{brokerage_id:'C'},{user_id:'Z'},{parent_listing_id:null}])assert.deepEqual(ids(group([listing,{...sale,...patch}])),['L1','S1']);});
+test('listing with unresolved own review stays visible',()=>{for(const review_status of ['Submitted','Changes requested'])assert.deepEqual(ids(group([{...listing,review_status},sale])),['L1','S1']);});
+test('multiple valid sale records are never dropped',()=>{const r=group([listing,{...sale,created_at:'2026-11-26'},{...sale,id:'S2',created_at:'2026-11-27'}]);assert.deepEqual(ids(r),['S1','S2']);assert.equal(r.currentId('L1'),'S2');});

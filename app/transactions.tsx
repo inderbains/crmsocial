@@ -1,6 +1,7 @@
 'use client';
 import {useCallback,useEffect,useState,type FormEvent} from 'react';
 import {getSupabase} from '../lib/supabase';
+import {currentTransactionIndex} from '../lib/current-transaction.mjs';
 import AgentReports from './agent-reports';
 import TransactionActions from './transaction-actions';
 import StagedDocumentUpload from './staged-document-upload';
@@ -44,6 +45,7 @@ export default function Transactions({userId,backOffice,view,notify,initialDealI
  useEffect(()=>{if(!backOffice)return;void(async()=>{const m=await getSupabase()!.from('brokerage_members').select('brokerage_id,role').eq('user_id',userId).maybeSingle();if(m.data?.role!=='admin')return;const r=await getSupabase()!.from('office_agents').select('user_id,full_name').eq('brokerage_id',m.data.brokerage_id);if(r.data)setOfficeAgents(r.data.filter(a=>a.user_id))})();},[backOffice,userId]);
  function agentLink(owner:string){const p=officeAgents.find(a=>a.user_id===owner);return backOffice&&p?<button className="text-link no-print" onClick={()=>window.dispatchEvent(new CustomEvent('realvolt:agent-profile',{detail:owner}))}>{p.full_name}</button>:null}
  const [documentRevision,setDocumentRevision]=useState(0);
+ const [emailHistoryRevision,setEmailHistoryRevision]=useState(0);
  const [linkedListingDocs,setLinkedListingDocs]=useState<Doc[]>([]);
  const [relatedHistory,setRelatedHistory]=useState<{key:string;groups:RelatedFileGroup[];error:string;loading:boolean}>({key:'',groups:[],error:'',loading:false});
  const [archiveManifest,setArchiveManifest]=useState<Array<{id:string;name:string;path:string;phase:string}>>([]);
@@ -66,13 +68,16 @@ export default function Transactions({userId,backOffice,view,notify,initialDealI
  function visibleStage(d:Deal){if(d.kind==='Sale'&&d.rv_stage==='Archived')return 'Completed · Archived';if(d.kind==='Sale'&&d.rv_stage==='Completed')return 'Completed';return statusFor(d);}
  const stageBorder=(d:Deal)=>{const color=stageColor(d);return color?{border:'2px solid '+color,borderRadius:11}:undefined};
  const stageBadge=(d:Deal)=>{const color=stageColor(d);return color?{border:'1px solid '+color,color,background:'transparent'}:undefined};
- const reload=useCallback(async(quiet=false)=>{if(!quiet)setLoading(true);try{let q=db.from('deal_files').select('*').is('rv_deleted_at',null).order('created_at',{ascending:false});q=initialDealId?q.eq('id',initialDealId):backOffice?q.or('review_status.neq.Draft,and(kind.eq.Sale,rv_stage.eq."Accepted offer")'):q.eq('user_id',userId);const r=await q;if(r.error)throw r.error;setRows(r.data);setError('')}catch(e){setError((e as Error).message+' — Check that supabase/004_transactions.sql has been installed.')}finally{if(!quiet)setLoading(false)}},[db,userId,backOffice,initialDealId]);
+ const reload=useCallback(async(quiet=false)=>{if(!quiet)setLoading(true);try{let q=db.from('deal_files').select('*').is('rv_deleted_at',null).order('created_at',{ascending:false});q=initialDealId?q.eq('id',initialDealId):backOffice?q.or('review_status.neq.Draft,and(kind.eq.Sale,rv_stage.eq."Accepted offer")'):q.eq('user_id',userId);const r=await q;if(r.error)throw r.error;const records:Deal[]=r.data||[];
+ if(backOffice&&initialDealId&&records[0]?.kind==='Listing'&&records[0].brokerage_id){const parent=records[0];const children=await db.from('deal_files').select('*').eq('parent_listing_id',parent.id).eq('brokerage_id',parent.brokerage_id).eq('user_id',parent.user_id).eq('kind','Sale').is('rv_deleted_at',null).or('review_status.neq.Draft,and(kind.eq.Sale,rv_stage.eq."Accepted offer")');if(children.error)throw children.error;records.push(...(children.data||[]));}setRows(records);setError('')}catch(e){setError((e as Error).message+' — Check that supabase/004_transactions.sql has been installed.')}finally{if(!quiet)setLoading(false)}},[db,userId,backOffice,initialDealId]);
  useEffect(()=>{void reload()},[reload,view]);
   // Keep Back Office's Submitted queue in sync after an agent resubmits corrections.
   useEffect(()=>{if(!backOffice)return;const refresh=()=>void reload(true);const timer=setInterval(refresh,15000);window.addEventListener('focus',refresh);return()=>{clearInterval(timer);window.removeEventListener('focus',refresh)}},[backOffice,reload]);
- const active=rows.find(d=>d.id===selected),locked=!!active&&!['Draft','Changes requested'].includes(active.review_status);
+ const currentIndex=currentTransactionIndex(rows);
+ const currentSelected=selected&&backOffice?currentIndex.currentId(selected):selected;
+ const active=rows.find(d=>d.id===currentSelected),locked=!!active&&!['Draft','Changes requested'].includes(active.review_status);
  // Never render documents left in state from the previously opened file.
- const docs=loadedDocs.filter(doc=>doc.deal_id===selected);
+ const docs=loadedDocs.filter(doc=>doc.deal_id===currentSelected);
  const historyKey=active?`${userId}:${active.id}:${active.brokerage_id||''}`:'';
  const history=relatedHistory.key===historyKey?relatedHistory:{key:historyKey,groups:[],error:'',loading:true};
  // Resolve the file owner from the brokerage's central agent profile, not the client or cooperating agent.
@@ -134,16 +139,16 @@ export default function Transactions({userId,backOffice,view,notify,initialDealI
   })();
   return()=>{live=false};
  },[db,active?.id,active?.rv_stage,active?.kind,backOffice]);
- useEffect(()=>{setReview('');setDocs([])},[selected,userId]);
+ useEffect(()=>{setReview('');setDocs([])},[currentSelected,userId]);
  useEffect(()=>{
-  if(!selected)return;
+  if(!currentSelected)return;
   let live=true,inFlight=false;
   const refresh=async()=>{
    if(!live||inFlight)return;inFlight=true;
    try{
     const result:Doc[]=[];
     for(let start=0;live;start+=500){
-     const r=await db.from('deal_documents').select('*').eq('deal_id',selected).order('created_at').order('id').range(start,start+499);
+     const r=await db.from('deal_documents').select('*').eq('deal_id',currentSelected).order('created_at').order('id').range(start,start+499);
      if(r.error)throw r.error;result.push(...(r.data||[]));if((r.data||[]).length<500)break;
     }
     if(live)setDocs(result);
@@ -154,7 +159,7 @@ export default function Transactions({userId,backOffice,view,notify,initialDealI
   const timer=backOffice?window.setInterval(onFocus,15000):undefined;
   if(backOffice)window.addEventListener('focus',onFocus);
   return()=>{live=false;if(timer!==undefined)window.clearInterval(timer);window.removeEventListener('focus',onFocus)};
- },[selected,db,notify,backOffice,userId,documentRevision]);
+ },[currentSelected,db,notify,backOffice,userId,documentRevision]);
  // Read only the actual parent/child relationship, never match on address or client name.
  // Use the normal authenticated client: existing RLS and Storage rules remain authoritative.
  useEffect(()=>{
@@ -330,10 +335,10 @@ export default function Transactions({userId,backOffice,view,notify,initialDealI
  }
 
  const commissionSummary=(d:DealInput)=>{try{const c=calculateClosing(d);return <div className="notice"><b>Commission and deposit summary</b><p>Commission: {money(c.commission)} + GST: {money(c.gst)} = {money(c.total)}</p><p>Deposit recorded: {money(c.deposit)} · Held by us: {money(c.held)}</p><p>Proposed our-side retention: {money(c.deducted)} · Proposed balance before other authorized payments: {money(c.remittance)}</p><p>Commission still to be received: {money(c.shortfall)}</p>{c.external&&<p>Deposit held by {d.deposit_brokerage}. No deposit funds are held or remitted by our brokerage.</p>}</div>}catch(e){return <div className="notice">{(e as Error).message}</div>}};
- const refreshFile=async()=>{await reload();await loadStatuses();if(selected){const r=await db.from('deal_documents').select('*').eq('deal_id',selected).order('created_at');if(!r.error){setDocs(r.data);setDocumentRevision(n=>n+1)}}};
+ const refreshFile=async()=>{await reload();await loadStatuses();if(currentSelected){const r=await db.from('deal_documents').select('*').eq('deal_id',currentSelected).order('created_at');if(!r.error){setDocs(r.data);setDocumentRevision(n=>n+1)}}};
  const labelFor=(d:Deal)=>d.transaction_number?`${d.kind==='Listing'?'LST':'SLE'}-${String(d.transaction_number).padStart(6,'0')}`:transactionLabel(d.transaction_number);
  const linked=(d:Deal)=>summaries.some(s=>s.parent_listing_id===d.id&&s.display_status!=='Collapsed');
- const filtered=rows.filter(d=>{
+ const filtered=(backOffice?currentIndex.rows:rows).filter(d=>{
   if(agentFilter&&backOffice&&d.user_id!==agentFilter)return false;
   if(!d.address.toLowerCase().includes(query.toLowerCase()))return false;
   if(view==='Closed Files'||view==='Closed files')return d.kind==='Sale'&&d.rv_stage==='Archived';
@@ -417,7 +422,7 @@ export default function Transactions({userId,backOffice,view,notify,initialDealI
   <section aria-label="CIR and lawyer email step" style={{marginTop:18}}>
    <h3 style={{fontSize:18,margin:'0 0 8px'}}>3. CIR & lawyer email — approved file</h3>
    <p className="hint">Review the CIR and select verified conveyancing documents before sending the lawyer package when ready. You can record confirmed legal completion separately below.</p>
-   <ClosingPanel agentName={fileOwnerName} key={active.id+'-'+documentRevision} dealId={active.id} docs={docs} notify={notify} onSaved={refreshFile}/>
+   <ClosingPanel agentName={fileOwnerName} key={active.id+'-'+documentRevision} dealId={active.id} docs={docs} notify={notify} onSaved={refreshFile} onDeliveryAttempted={()=>setEmailHistoryRevision(n=>n+1)}/>
   </section>}
  {backOffice&&active.kind==='Sale'&&active.rv_stage==='Sold'&&active.review_status==='Approved'&&
   <section aria-label="Legal completion step" className="panel" style={{marginTop:18}}>
@@ -428,12 +433,12 @@ export default function Transactions({userId,backOffice,view,notify,initialDealI
 
  {backOffice&&active.rv_stage==='Completed'&&<TransactionCommissionPayout key={active.id} deal={active} agentName={fileOwnerName} docs={docs} notify={notify} onChanged={refreshFile}/>}
  {backOffice&&active.kind==='Sale'&&active.rv_stage==='Completed'&&<ComplianceClosingPanel agentName={fileOwnerName} key={active.id+'-'+documentRevision} deal={active} docs={docs} office={true} notify={notify} onSaved={refreshFile}/>}
- {backOffice&&active.rv_stage!=='Archived'&&['Approved','Completed'].includes(active.review_status)&&
+ {backOffice&&(['Approved','Completed'].includes(active.review_status)||(active.kind==='Sale'&&active.rv_stage==='Archived'))&&
   <details id="rv-file-compliance-review" style={{scrollMarginTop:24,marginTop:14,border:'1px solid #cedcd1',borderRadius:11,padding:12}}>
    <summary style={{cursor:'pointer',fontWeight:700,fontSize:17}}>Advanced compliance records — expand</summary>
-   <DealAdmin agentName={fileOwnerName} kind={active.kind} canAllocate={false} key={active.id+'-'+active.updated_at+'-'+documentRevision} dealId={active.id} status={active.review_status} backOffice={true} docs={docs} defaultCommission={Number(active.representation==='listing'?active.listing_commission:active.selling_commission)} defaultGST={Math.round(Number(active.representation==='listing'?active.listing_commission:active.selling_commission)*Number(active.gst_rate))/100} notify={notify}/>
+   {active.rv_stage!=='Archived'&&<DealAdmin agentName={fileOwnerName} kind={active.kind} canAllocate={false} key={active.id+'-'+active.updated_at+'-'+documentRevision} dealId={active.id} status={active.review_status} backOffice={true} docs={docs} defaultCommission={Number(active.representation==='listing'?active.listing_commission:active.selling_commission)} defaultGST={Math.round(Number(active.representation==='listing'?active.listing_commission:active.selling_commission)*Number(active.gst_rate))/100} notify={notify}/>}
+   {active.kind==='Sale'&&['Sold','Completed','Archived'].includes(active.rv_stage||'')&&<LawyerEmailHistory key={active.id} dealId={active.id} revision={emailHistoryRevision} title="Lawyer email history"/>}
   </details>}
- {backOffice&&active.kind==='Sale'&&['Sold','Completed','Archived'].includes(active.rv_stage||'')&&<details style={{marginTop:14,border:'1px solid #cedcd1',borderRadius:11,padding:12}}><summary style={{cursor:'pointer',fontWeight:700,fontSize:17}}>Compliance — lawyer email history</summary><LawyerEmailHistory key={active.id} dealId={active.id}/></details>}
  {backOffice&&active.rv_stage==='Completed'&&<section aria-label="Closing transaction actions" className="panel" style={{marginTop:18}}>
   <h3>Final action — Close / Archive file</h3>
   <p className="hint">Complete commission receipt, authorized payout, and any final compliance checks before closing this transaction.</p>

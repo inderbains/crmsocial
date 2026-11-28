@@ -3,6 +3,7 @@ import {useCallback,useEffect,useMemo,useState} from 'react';
 import {RefreshCw,ClipboardCheck,FilePenLine,FileCheck2,UserRound,UserRoundPlus,SlidersHorizontal,Printer,WalletCards,CreditCard,Landmark,Scale,ChartNoAxesCombined,ShieldCheck,ClipboardList,Settings2,Database,Megaphone,Route,TrendingUp,ArrowUpRight,FileSpreadsheet,Archive} from 'lucide-react';
 import type {LucideIcon} from 'lucide-react';
 import {getSupabase} from '../lib/supabase';
+import {currentTransactionIndex} from '../lib/current-transaction.mjs';
 import {brokerageDay} from '../lib/listing-status';
 import {computeOfficeInsights} from '../lib/office-insights.mjs';
 import {summarizeWorkflow} from '../lib/transaction-workflow.mjs';
@@ -34,7 +35,7 @@ export default function BackOfficeDashboard({userId,brokerageName,deals,requirem
   const id=member.data.brokerage_id;setBrokerageId(id);
   const [n,d,s]=await Promise.all([
    db.from('rv_transaction_notifications').select('id,deal_id,message,created_at,read_at').eq('recipient_id',sessionUserId).order('created_at',{ascending:false}).limit(100),
-   db.from('deal_files').select('id,address,kind,review_status,rv_stage,subject_date,completion_date,created_at,updated_at,brokerage_id').eq('brokerage_id',id).order('created_at',{ascending:false}).limit(300),
+   db.from('deal_files').select('id,address,kind,review_status,rv_stage,subject_date,completion_date,created_at,updated_at,brokerage_id,user_id,parent_listing_id,rv_deleted_at').is('rv_deleted_at',null).eq('brokerage_id',id).order('created_at',{ascending:false}).limit(300),
    db.from('rv_tx_summary').select('id,address,kind,display_status,next_date,review_status').eq('brokerage_id',id).not('next_date','is',null).order('next_date').limit(80),
   ]);
   if(!n.error)setNotices(n.data||[]);
@@ -49,38 +50,44 @@ export default function BackOfficeDashboard({userId,brokerageName,deals,requirem
   return()=>{void db.removeChannel(noticeSub);void db.removeChannel(dealSub)};
  },[db,sessionUserId,brokerageId,load]);
  const merged=useMemo(()=>{const map=new Map(deals.map(d=>[d.id,d]));for(const live of liveDeals)map.set(live.id,{...map.get(live.id),...live});return [...map.values()]},[deals,liveDeals]);
+ const current=useMemo(()=>currentTransactionIndex(merged),[merged]);
+ const displayDeals=current.rows;
  const previousMonth=lastMonth;
  const insights=useMemo(()=>computeOfficeInsights({deals:merged,payouts,accounts,ledger,reconciliations,requirements,reconciliationMonth:previousMonth},today.slice(0,7)),[merged,payouts,accounts,ledger,reconciliations,requirements,previousMonth,today]);
- const submissions=merged.filter(d=>d.review_status==='Submitted').sort((a,b)=>String(b.updated_at||b.created_at||'').localeCompare(String(a.updated_at||a.created_at||'')));
- const needsDocs=merged.filter(d=>requirements.some(r=>r.deal_id===d.id&&r.verified!==true)&&d.review_status!=='Draft');
+ const submissions=displayDeals.filter(d=>d.review_status==='Submitted').sort((a,b)=>String(b.updated_at||b.created_at||'').localeCompare(String(a.updated_at||a.created_at||'')));
+ const needsDocs=displayDeals.filter(d=>requirements.some(r=>r.deal_id===d.id&&r.verified!==true)&&d.review_status!=='Draft');
  const reviewList=[...submissions,...needsDocs.filter(d=>d.review_status!=='Submitted')]; // Pending reviews remain in their folder even after a notification is read.
- const upcoming=summary.filter(d=>d.next_date&&d.next_date>=today&&d.review_status!=='Draft');
+ const upcoming=summary.filter(d=>d.next_date&&d.next_date>=today&&d.review_status!=='Draft'&&current.currentId(d.id)===d.id);
  const unreadNotices=notices.filter(n=>!n.read_at); // Inbox is transient; transaction records are not.
- const openDeal=(id:string)=>window.dispatchEvent(new CustomEvent('realvolt:open-transaction',{detail:{id,office:true,section:'Review queue',focus:merged.find(d=>d.id===id)?.review_status==='Submitted'?'compliance':undefined}}));
+ const openDeal=(id:string)=>{const target=current.currentId(id),deal=merged.find(d=>d.id===target);window.dispatchEvent(new CustomEvent('realvolt:open-transaction',{detail:{id:target,office:true,section:deal?.rv_stage==='Archived'?'Closed Files':deal?.review_status==='Approved'?'Approved':deal?.review_status==='Changes requested'?'Changes requested':'Review queue',focus:deal?.review_status==='Submitted'?'compliance':undefined}}))};
  async function openNotice(n:Notice){
-  const found=await db.from('deal_files').select('id,rv_stage,review_status').eq('id',n.deal_id).maybeSingle();
+  const target=current.currentId(n.deal_id);
+  const found=await db.from('deal_files').select('id,rv_stage,review_status').eq('id',target).maybeSingle();
   if(found.error||!found.data){setNoticeError('Cannot open the source transaction: '+(found.error?.message||'File unavailable'));return;}
   const deal=found.data;
   const section=deal.rv_stage==='Archived'?'Closed Files':deal.review_status==='Approved'?'Approved':deal.review_status==='Changes requested'?'Changes requested':'Review queue';
-  const detail:{id:string;office:boolean;section:string;focus?:string;accepted?:boolean}={id:n.deal_id,office:true,section,focus:deal.review_status==='Submitted'?'compliance':undefined};
+  const detail:{id:string;office:boolean;section:string;focus?:string;accepted?:boolean}={id:target,office:true,section,focus:deal.review_status==='Submitted'?'compliance':undefined};
   window.dispatchEvent(new CustomEvent('realvolt:open-transaction',{detail}));
   if(!detail.accepted)return; // A cancelled navigation must not consume a notification.
-  const r=await db.from('rv_transaction_notifications').update({read_at:new Date().toISOString()}).eq('deal_id',n.deal_id).eq('recipient_id',sessionUserId).is('read_at',null);
+  const sourceIds=[...new Set(unreadNotices.filter(x=>current.currentId(x.deal_id)===target).map(x=>x.deal_id))];
+  const r=await db.from('rv_transaction_notifications').update({read_at:new Date().toISOString()}).in('deal_id',sourceIds).eq('recipient_id',sessionUserId).is('read_at',null);
   if(r.error){setNoticeError('Could not mark notification as read: '+r.error.message);return;}
-  setNotices(a=>a.filter(x=>x.deal_id!==n.deal_id));
+  setNotices(a=>a.filter(x=>!sourceIds.includes(x.deal_id)));
  }
  const reviewItems:InboxItem[]=reviewList.map(d=>({id:'review-'+d.id,title:'Documents need verification',detail:d.address||'Transaction',onOpen:()=>openDeal(d.id)}));
  const upcomingItems:InboxItem[]=upcoming.map(x=>({id:'date-'+x.id,title:`${dateType(x)} · ${dateLabel(x.next_date!)}`,detail:x.address||'Transaction',onOpen:()=>openDeal(x.id)}));
 
  // The previous Automatic Transaction Workflow is retained as an on-demand tab.
  // It only recommends the next responsible module; it never sends legal emails or releases money.
- const stages=useMemo(()=>summarizeWorkflow(merged,{today,ledger,payouts,allocations,matches,accounts,deliveries:closingDeliveries,requirements}),
-  [merged,today,ledger,payouts,allocations,matches,accounts,closingDeliveries,requirements]);
+ const stages=useMemo(()=>summarizeWorkflow(displayDeals,{today,ledger,payouts,allocations,matches,accounts,deliveries:closingDeliveries,requirements}),
+  [displayDeals,today,ledger,payouts,allocations,matches,accounts,closingDeliveries,requirements]);
  const openWorkflow=(dealId:string,nextModule:string)=>{
+  if(['Transactions','Review queue','Changes requested','Approved','Closed Files'].includes(nextModule)||!nextModule){openDeal(dealId);return;}
   try{window.sessionStorage.setItem('realvolt:workflow-target-deal',dealId)}catch{}
   onNavigate(nextModule==='Transactions'?'Review queue':nextModule||'Review queue');
  };
- const stageItems:InboxItem[]=stages.filter(x=>x.status!=='Draft'&&x.percent<100).map(x=>({
+ const displayStages=stages.map(x=>{const d=displayDeals.find(r=>r.id===x.dealId);return d?.kind==='Sale'&&d.rv_stage==='Accepted offer'&&d.review_status==='Draft'?{...x,status:'Accepted offer',stage:'Accepted offer',percent:50,owner:'Agent',nextAction:'Monitor subjects and signed amendments',nextModule:'Review queue'}:x});
+ const stageItems:InboxItem[]=displayStages.filter(x=>x.status!=='Draft'&&x.percent<100).map(x=>({
   id:'stage-'+x.dealId,
   title:`${x.address||'Transaction'} · ${x.stage}`,
   detail:`${x.percent}% · ${x.owner}: ${x.nextAction}`,
@@ -91,7 +98,7 @@ export default function BackOfficeDashboard({userId,brokerageName,deals,requirem
  // Current review state wins, so an older upload notification cannot reopen a finished approval.
  const dealIndex=new Map(merged.map(d=>[d.id,d]));
  const officeNoticeCategory=(n:Notice):'review'|'workflow'=>{
-  const d=dealIndex.get(n.deal_id);
+  const d=dealIndex.get(current.currentId(n.deal_id));
   return d?.review_status==='Submitted'||d?.review_status==='Changes requested'?'review':'workflow';
  };
  const reviewAlerts:InboxItem[]=[],workflowAlerts:InboxItem[]=[];
@@ -99,9 +106,11 @@ export default function BackOfficeDashboard({userId,brokerageName,deals,requirem
  const actionableNotices=unreadNotices.filter(n=>dealIndex.has(n.deal_id));
  for(const n of actionableNotices){
   const key=officeNoticeCategory(n),seen=key==='review'?reviewAlertDeals:workflowAlertDeals;
-  if(seen.has(n.deal_id))continue;
-  seen.add(n.deal_id);
-  (key==='review'?reviewAlerts:workflowAlerts).push({id:'notification-'+n.id,title:n.message,detail:`${dealIndex.get(n.deal_id)?.address||'Transaction'} · ${timeLabel(n.created_at)}`,unread:true,onOpen:()=>void openNotice(n)});
+  const target=current.currentId(n.deal_id);
+  if(seen.has(target))continue;
+  seen.add(target);
+  const stage=key==='workflow'?stageItems.find(item=>item.id==='stage-'+target):undefined;
+  (key==='review'?reviewAlerts:workflowAlerts).push({id:'notification-'+n.id,title:stage?.title||n.message,detail:stage?`${stage.detail} · ${n.message}`:`${dealIndex.get(target)?.address||'Transaction'} · ${timeLabel(n.created_at)}`,progress:stage?.progress,unread:true,onOpen:()=>void openNotice(n)});
  }
  const reviewTabItems=[...reviewAlerts,...reviewItems.filter(x=>!reviewAlertDeals.has(x.id.slice('review-'.length)))];
  const workflowTabItems=[...workflowAlerts,...stageItems.filter(x=>!workflowAlertDeals.has(x.id.slice('stage-'.length)))];
@@ -112,9 +121,9 @@ export default function BackOfficeDashboard({userId,brokerageName,deals,requirem
   {key:'workflow',label:'Deal stages',count:workflowTabItems.length,items:workflowTabItems,unreadCount:workflowAlerts.length,empty:'No outstanding transaction stages.'},
  ];
 
- const submitted=merged.filter(d=>d.review_status==='Submitted');
- const changes=merged.filter(d=>d.review_status==='Changes requested');
- const approved=merged.filter(d=>d.review_status==='Approved'&&d.rv_stage!=='Archived');
+ const submitted=displayDeals.filter(d=>d.review_status==='Submitted');
+ const changes=displayDeals.filter(d=>d.review_status==='Changes requested');
+ const approved=displayDeals.filter(d=>d.review_status==='Approved'&&d.rv_stage!=='Archived');
  const closedFiles=merged.filter(d=>d.kind==='Sale'&&d.rv_stage==='Archived');
  const unpaid=payouts.filter(p=>p.status==='Authorized').length;
  const pendingDeposits=merged.filter(d=>d.kind==='Sale'&&d.deposit_holder==='our_brokerage'&&Number(d.deposit_amount)>0&&ledger.filter(l=>l.deal_id===d.id&&accounts.some(a=>a.kind==='Trust'&&a.id===l.account_id)).reduce((n,l)=>n+Number(l.amount||0),0)+.01<Number(d.deposit_amount));
